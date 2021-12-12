@@ -54,13 +54,13 @@
     "lazysizes": "^5.3",
     "markdownlint-cli": "^0.30",
     "netlify-lambda": "^2.0",
-    "postcss": "^8.3",
+    "postcss": "^8.4",
     "postcss-cli": "^8.3",
     "purgecss-whitelister": "^2.4",
     "rimraf": "^3.0",
     "shx": "^0.3.3",
     "standard-version": "^9.3",
     "stylelint": "^13.13",
-    "stylelint-config-standard": "^21.0"
+    "stylelint-config-standard": "^22.0"
   }
 }
