@@ -80,8 +80,9 @@ Source:
           'description',
         ],
     },
+    encode: false,
     tokenize: function(str) {
-        return str.split(/\W+/).concat(str.replace(/[\x00-\x7F]/g, '').split('')).filter(e => !!e);
+        return str.replace(/[\x00-\x7F]/g, "").split("");
     }
   });
 
