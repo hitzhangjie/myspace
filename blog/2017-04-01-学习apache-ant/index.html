@@ -1,0 +1,409 @@
+<!doctype html><html lang=en-us><head><meta charset=utf-8><meta http-equiv=x-ua-compatible content="ie=edge"><meta name=viewport content="width=device-width,initial-scale=1,shrink-to-fit=no"><link rel=preload as=font href=/fonts/vendor/jost/jost-v4-latin-regular.woff2 type=font/woff2 crossorigin><link rel=preload as=font href=/fonts/vendor/jost/jost-v4-latin-500.woff2 type=font/woff2 crossorigin><link rel=preload as=font href=/fonts/vendor/jost/jost-v4-latin-700.woff2 type=font/woff2 crossorigin><link rel=stylesheet href=/main.63b6b8ff933309fcc94a30e21d69932290c8643fa1a32893f5681778c776ed3e51c237a1acd00b42426b3bf780c351b4a6ce75b3b659915ef0dd610b2e027a8c.css integrity="sha512-Y7a4/5MzCfzJSjDiHWmTIpDIZD+hoyiT9WgXeMd27T5RwjehrNALQkJrO/eAw1G0ps51s7ZZkV7w3WELLgJ6jA==" crossorigin=anonymous><noscript><style>img.lazyload{display:none}</style></noscript><meta name=robots content="index, follow"><meta name=googlebot content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1"><meta name=bingbot content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1"><title>学习Apache Ant - MySpace</title><meta name=description content="Apache Ant是Java工程中比较常用的一个依赖管理、构建工具，本文总结了Ant相关的一些基础知识。"><link rel=canonical href=/blog/2017-04-01-%E5%AD%A6%E4%B9%A0apache-ant/><meta property="og:locale" content="en_US"><meta property="og:type" content="article"><meta property="og:title" content="学习Apache Ant"><meta property="og:description" content="Apache Ant是Java工程中比较常用的一个依赖管理、构建工具，本文总结了Ant相关的一些基础知识。"><meta property="og:url" content="/blog/2017-04-01-%E5%AD%A6%E4%B9%A0apache-ant/"><meta property="og:site_name" content="MySpace"><meta property="article:published_time" content="2017-04-01T17:45:40+08:00"><meta property="article:modified_time" content="2017-04-01T17:45:40+08:00"><meta property="og:image" content="/doks.png"><meta property="og:image:alt" content="MySpace"><meta name=twitter:card content="summary_large_image"><meta name=twitter:site content="@hitzhangjie"><meta name=twitter:creator content="@hitzhangjie"><meta name=twitter:title content="学习Apache Ant"><meta name=twitter:description content="Apache Ant是Java工程中比较常用的一个依赖管理、构建工具，本文总结了Ant相关的一些基础知识。"><meta name=twitter:image content="/doks.png"><meta name=twitter:image:alt content="学习Apache Ant"><script type=application/ld+json>{"@context":"https://schema.org","@graph":[{"@type":"Person","@id":"/#/schema/person/1","name":"","url":"/","sameAs":["https://twitter.com/hitzhangjie","https://www.linkedin.com/in/hitzhangjie/","https://github.com/hitzhangjie"],"image":{"@type":"ImageObject","@id":"/#/schema/image/1","url":"/\u003cnil\u003e","width":null,"height":null,"caption":""}},{"@type":"WebSite","@id":"/#/schema/website/1","url":"/","name":"MySpace","description":"MySpace is a hitzhangjie\u0027s personal space, for blogs, books, journey, thinkings.","publisher":{"@id":"/#/schema/person/1"}},{"@type":"WebPage","@id":"/blog/2017-04-01-%E5%AD%A6%E4%B9%A0apache-ant/","url":"/blog/2017-04-01-%E5%AD%A6%E4%B9%A0apache-ant/","name":"学习Apache Ant","description":"Apache Ant是Java工程中比较常用的一个依赖管理、构建工具，本文总结了Ant相关的一些基础知识。","isPartOf":{"@id":"/#/schema/website/1"},"about":{"@id":"/#/schema/person/1"},"datePublished":"2017-04-01T17:45:40CET","dateModified":"2017-04-01T17:45:40CET","breadcrumb":{"@id":"/blog/2017-04-01-%E5%AD%A6%E4%B9%A0apache-ant/#/schema/breadcrumb/1"},"primaryImageOfPage":{"@id":"/blog/2017-04-01-%E5%AD%A6%E4%B9%A0apache-ant/#/schema/image/2"},"inLanguage":"","potentialAction":[{"@type":"ReadAction","target":["/blog/2017-04-01-%E5%AD%A6%E4%B9%A0apache-ant/"]}]},{"@type":"BreadcrumbList","@id":"/blog/2017-04-01-%E5%AD%A6%E4%B9%A0apache-ant/#/schema/breadcrumb/1","name":"Breadcrumbs","itemListElement":[{"@type":"ListItem","position":1,"item":{"@type":"WebPage","@id":"/","url":"/","name":"Home"}},{"@type":"ListItem","position":2,"item":{"@id":"/blog2017-04-01-%E5%AD%A6%E4%B9%A0apache-ant/"}}]},{"@context":"https://schema.org","@graph":[{"@type":"Article","@id":"/#/schema/article/1","headline":"学习Apache Ant","description":"Apache Ant是Java工程中比较常用的一个依赖管理、构建工具，本文总结了Ant相关的一些基础知识。","isPartOf":{"@id":"/blog/2017-04-01-%E5%AD%A6%E4%B9%A0apache-ant/"},"mainEntityOfPage":{"@id":"/blog/2017-04-01-%E5%AD%A6%E4%B9%A0apache-ant/"},"datePublished":"2017-04-01T17:45:40CET","dateModified":"2017-04-01T17:45:40CET","author":{"@id":"/#/schema/person/2"},"publisher":{"@id":"/#/schema/person/1"},"image":{"@id":"/blog/2017-04-01-%E5%AD%A6%E4%B9%A0apache-ant/#/schema/image/2"}}]},{"@context":"https://schema.org","@graph":[{"@type":"Person","@id":"/#/schema/person/2","name":null,"sameAs":[]}]},{"@context":"https://schema.org","@graph":[{"@type":"ImageObject","@id":"/blog/2017-04-01-%E5%AD%A6%E4%B9%A0apache-ant/#/schema/image/2","url":"/doks.png","contentUrl":"/doks.png","caption":"学习Apache Ant"}]}]}</script><meta name=theme-color content="#fff"><link rel=icon href=/favicon.ico sizes=any><link rel=icon type=image/svg+xml href=/favicon.svg><link rel=apple-touch-icon sizes=180x180 href=/apple-touch-icon.png><link rel=icon type=image/png sizes=32x32 href=/favicon-32x32.png><link rel=icon type=image/png sizes=16x16 href=/favicon-16x16.png><link rel=manifest crossorigin=use-credentials href=/site.webmanifest><script type=text/javascript src="https://platform-api.sharethis.com/js/sharethis.js#property=607868a58d7101001829a8df&product=sop" async></script><style>[alt~=sharing]{border:0;box-shadow:none}div#st-1{text-align:unset}div#st-1 .st-btn{height:24px;padding:0 4px}div#st-1 .st-btn>img{top:4.2px}div#st-2 .st-btn{height:24px;padding:0 4px}div#st-2 .st-btn>img{top:4.2px}</style></head><body class="blog single"><div class=sticky-top><div class=header-bar></div><header class="navbar navbar-expand-lg navbar-light doks-navbar"><nav class="container-xxl flex-wrap flex-lg-nowrap" aria-label="Main navigation"><a class="navbar-brand order-0" href=/ aria-label=MySpace>MySpace</a>
+<button class="btn btn-menu order-2 d-block d-lg-none" type=button data-bs-toggle=offcanvas data-bs-target=#offcanvasDoks aria-controls=offcanvasDoks aria-label="Open main menu"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentcolor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-menu"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button><div class="offcanvas offcanvas-end border-0 py-lg-1" tabindex=-1 id=offcanvasDoks data-bs-backdrop=true aria-labelledby=offcanvasDoksLabel><div class="header-bar d-lg-none"></div><div class="offcanvas-header d-lg-none"><h2 class="h5 offcanvas-title ps-2" id=offcanvasDoksLabel><a class=text-dark href=/>MySpace</a></h2><button type=button class="btn-close text-reset me-2" data-bs-dismiss=offcanvas aria-label="Close main menu"></button></div><div class="offcanvas-body p-4 p-lg-0"><ul class="nav flex-column flex-lg-row align-items-lg-center mt-2 mt-lg-0 ms-lg-2 me-lg-auto"><li class=nav-item><a class="nav-link ps-0 py-1 active" href=/blog/>Blog</a></li><li class=nav-item><a class="nav-link ps-0 py-1" href=/books/>Books</a></li><li class=nav-item><a class="nav-link ps-0 py-1" href=/journey/introduction>Journey</a></li></ul><hr class="text-black-50 my-4 d-lg-none"><form class="doks-search position-relative flex-grow-1 ms-lg-auto me-lg-2"><input id=search class="form-control is-search" type=search placeholder="Search docs..." aria-label="Search docs..." autocomplete=off><div id=suggestions class="shadow bg-white rounded d-none"></div></form><hr class="text-black-50 my-4 d-lg-none"><ul class="nav flex-column flex-lg-row"><li class=nav-item><a class="nav-link social-link" href=https://twitter.com/hitzhangjie><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentcolor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-twitter"><path d="M23 3a10.9 10.9.0 01-3.14 1.53 4.48 4.48.0 00-7.86 3v1A10.66 10.66.0 013 4s-4 9 5 13a11.64 11.64.0 01-7 2c9 5 20 0 20-11.5a4.5 4.5.0 00-.08-.83A7.72 7.72.0 0023 3z"/></svg><small class="ms-2 d-lg-none">Twitter</small></a></li><li class=nav-item><a class="nav-link social-link" href=https://github.com/hitzhangjie><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentcolor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-github"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37.0 00-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44.0 0020 4.77 5.07 5.07.0 0019.91 1S18.73.65 16 2.48a13.38 13.38.0 00-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07.0 005 4.77 5.44 5.44.0 003.5 8.55c0 5.42 3.3 6.61 6.44 7A3.37 3.37.0 009 18.13V22"/></svg><small class="ms-2 d-lg-none">GitHub</small></a></li></ul></div></div></nav></header></div><div class="wrap container-xxl" role=document><div class=content><div class="row flex-xl-nowrap"><div class="col-lg-5 col-xl-4 docs-sidebar"><nav class=docs-links aria-label="Main navigation"><h3>Tag List</h3><ol><li><a href=/tags/ant/>ant</a></li><li><a href=/tags/java/>java</a></li></ol></nav></div><nav class="docs-toc d-none d-xl-block col-xl-3" aria-label="Secondary navigation"><div class=page-links><h3>On this page</h3><nav id=TableOfContents><ul><li><ul><li><ul><li><a href=#1-为什么需要这样一个构建工具>1 为什么需要这样一个构建工具？</a></li><li><a href=#2-ant-buildxml>2 Ant build.xml</a></li><li><a href=#3-ant-buildproperties>3 Ant build.properties</a></li><li><a href=#4-ant-data-types>4 Ant Data Types</a></li><li><a href=#5-ant的一个简单构建示例>5 Ant的一个简单构建示例</a></li><li><a href=#6-ant构建文档>6 Ant构建文档</a></li><li><a href=#7-ant构建jar包>7 Ant构建jar包</a></li><li><a href=#8-ant构建war包>8 Ant构建war包</a></li><li><a href=#9-ant的一个完整buildxml配置>9 Ant的一个完整build.xml配置</a></li><li><a href=#10-ant的一个更完整配置示例>10 Ant的一个更完整配置示例</a></li><li><a href=#11-ant执行程序>11 Ant执行程序</a></li><li><a href=#12-扩展ant>12 扩展Ant</a></li><li><a href=#13-在ide中使用ant>13 在IDE中使用Ant</a></li></ul></li></ul></li></ul></nav></div></nav><main class="docs-content col-lg-11 col-xl-9"><h1>学习Apache Ant</h1><div style=display:flex><div>分享:&nbsp;&nbsp;</div><div><div class=sharethis-inline-share-buttons></div></div></div><hr><p class=lead></p><p>Apache Ant是由Apache开发的基于Java的构建工具，本文对tutorialspoint上面的Apache Ant教程进行简要总结。</p><h3 id=1-为什么需要这样一个构建工具>1 为什么需要这样一个构建工具？ <a href=#1-%e4%b8%ba%e4%bb%80%e4%b9%88%e9%9c%80%e8%a6%81%e8%bf%99%e6%a0%b7%e4%b8%80%e4%b8%aa%e6%9e%84%e5%bb%ba%e5%b7%a5%e5%85%b7 class=anchor aria-hidden=true>#</a><a href=#1-为什么需要这样一个构建工具 class=anchor aria-hidden=true>#</a></h3><p>Ant是Another Neat Tool的缩写形式，为什么需要这样一个工具呢？跟它的名字一样，就是希望我们开发人员的工作能够更加neat！</p><p>开发人员有些琐碎的、重复性的工作，包括：编译代码、打包可执行程序、部署程序到测试服务器、测试改变、拷贝代码到不同的地方。Ant可以帮助我们自动化上面列举的这几个步骤，简化我们的工作。</p><p>Ant是tomcat的作者开发出来的，最初适用于构建tomcat的，并且作为tomcat的一部分，之所以开发它是为了弥补当初Apache Make工具（没有在apache项目列表中搜索到该项目）的不足之处，2000年的时候Ant从tomcat项目中独立出来作为一个独立的项目开发。</p><p>至于Apache Ant的优势具体在哪，这个我们最后在给出来，目的是让大家结合自身工作经历，根据Apache Ant的功能自己主动去发现它的优势。</p><h3 id=2-ant-buildxml>2 Ant build.xml <a href=#2-ant-buildxml class=anchor aria-hidden=true>#</a><a href=#2-ant-buildxml class=anchor aria-hidden=true>#</a></h3><p>Ant的构建脚本默认是build.xml，也可以用其他的文件名。build.xml里面通常包括tag <project name default basedir>，这里name指定了工程的名字，default是默认名字，basedir指定了工程的根目录。另外还包括多个tag <target name depends>，其中name指定了目标动作的名字，例如compile、package、clean等等，它们之间存在某种依赖关系，可以通过depends指定。例如package依赖clean、compile，就可以指定depends=&ldquo;clean,package&rdquo;，注意依赖先后顺序，不要写成depends=&ldquo;package,clean&rdquo;。</p><p>示例1：</p><pre><code class=language-java>&lt;?xml version=&quot;1.0&quot;?&gt;
+   &lt;project name=&quot;Hello World Project&quot; default=&quot;info&quot;&gt;
+
+   &lt;target name=&quot;info&quot;&gt;
+      &lt;echo&gt;Hello World - Welcome to Apache Ant!&lt;/echo&gt;
+   &lt;/target&gt;
+&lt;/project&gt;
+</code></pre><p>示例2：</p><pre><code class=language-java>&lt;target name=&quot;deploy&quot; depends=&quot;package&quot;&gt;
+  ....
+&lt;/target&gt;
+&lt;target name=&quot;package&quot; depends=&quot;clean,compile&quot;&gt;
+  ....
+&lt;/target&gt;
+&lt;target name=&quot;clean&quot; &gt;
+  ....
+&lt;/target&gt;
+&lt;target name=&quot;compile&quot; &gt;
+  ....
+&lt;/target&gt;
+</code></pre><p>build.xml里面可以使用ant预先定义的一些变量，例如：</p><table><thead><tr><th style=text-align:left>property</th><th style=text-align:left>desc</th></tr></thead><tbody><tr><td style=text-align:left>ant.file</td><td style=text-align:left>The full location of the build file.</td></tr><tr><td style=text-align:left>ant.version</td><td style=text-align:left>The version of the Apache Ant installation.</td></tr><tr><td style=text-align:left>basedir</td><td style=text-align:left>The basedir of the build, as specified in the basedir attribute of the project element.</td></tr><tr><td style=text-align:left>ant.java.version</td><td style=text-align:left>The version of the JDK that is used by Ant.</td></tr><tr><td style=text-align:left>ant.project.name</td><td style=text-align:left>The name of the project, as specified in the name atrribute of the project element.</td></tr><tr><td style=text-align:left>ant.project.default-target</td><td style=text-align:left>The default target of the current project.</td></tr><tr><td style=text-align:left>ant.project.invoked-targets</td><td style=text-align:left>Comma separated list of the targets that were invoked in the current project.</td></tr><tr><td style=text-align:left>ant.core.lib</td><td style=text-align:left>The full location of the Ant jar file.</td></tr><tr><td style=text-align:left>ant.home</td><td style=text-align:left>The home directory of Ant installation.</td></tr><tr><td style=text-align:left>ant.library.dir</td><td style=text-align:left>The home directory for Ant library files - typically ANT_HOME/lib folder.</td></tr></tbody></table><p>示例1：</p><pre><code class=language-java>&lt;?xml version=&quot;1.0&quot;?&gt;
+&lt;project name=&quot;Hello World Project&quot; default=&quot;info&quot;&gt;
+   &lt;property name=&quot;sitename&quot; value=&quot;www.tutorialspoint.com&quot;/&gt;
+   &lt;target name=&quot;info&quot;&gt;
+      &lt;echo&gt;Apache Ant version is ${ant.version} - You are at ${sitename} &lt;/echo&gt;
+   &lt;/target&gt;
+&lt;/project&gt;
+</code></pre><p>这样ant构建过程中会输出当前ant使用的版本以及站点名称，其中ant.version是ant的预定义变量，sitename是我们自己定义的变量。</p><h3 id=3-ant-buildproperties>3 Ant build.properties <a href=#3-ant-buildproperties class=anchor aria-hidden=true>#</a><a href=#3-ant-buildproperties class=anchor aria-hidden=true>#</a></h3><p>像上线这样在build.xml里面创建自定义变量的方式，如果自定义变量少的话还可以，当面对一个大型的工程有很多自定义变量的时候，直接在build.xml里面定义变量就困难了，那怎么办呢？
+我们可以在一个单独的属性配置文件中对需要用到的自定义属性进行配置，然后在build.xml里面进行引用。这个默认的属性配置文件是build.properties。</p><p>示例1：</p><p>build.xml：</p><pre><code class=language-java>&lt;?xml version=&quot;1.0&quot;?&gt;
+&lt;project name=&quot;Hello World Project&quot; default=&quot;info&quot;&gt;
+   &lt;property file=&quot;build.properties&quot;/&gt;
+   
+   &lt;target name=&quot;info&quot;&gt;
+      &lt;echo&gt;Apache Ant version is ${ant.version} - You are at ${sitename} &lt;/echo&gt;
+   &lt;/target&gt;
+   
+&lt;/project&gt;
+</code></pre><p>这个文件里面引用了一个自定义变量，我们将其定义在build.properties里面。</p><p>build.properties：</p><pre><code class=language-java># The Site Name
+sitename=www.tutorialspoint.com
+buildversion=3.3.2
+</code></pre><h3 id=4-ant-data-types>4 Ant Data Types <a href=#4-ant-data-types class=anchor aria-hidden=true>#</a><a href=#4-ant-data-types class=anchor aria-hidden=true>#</a></h3><p>不要将这里的数据类型跟编程语言中的数据类型混为一谈，这里说要描述的Ant提供的数据类型代表了Ant提供的一种service。</p><p>fileset类型代表了一系列文件集合，通过它可以包括某些文件或者排除某些文件，包括、排除文件是通过模式匹配的方式来实现。</p><p>示例1：</p><pre><code class=language-java>&lt;fileset dir=&quot;${src}&quot; casesensitive=&quot;yes&quot;&gt;
+   &lt;include name=&quot;**/*.java&quot;/&gt;
+   &lt;exclude name=&quot;**/*Stub*&quot;/&gt;
+&lt;/fileset&gt;
+</code></pre><p>这个例子中创建了一个fileset，它指向了源代码目录${src}，这里匹配文件模式的时候大小写敏感，并且包括src目录下以及任意子目录下的java文件，并排除Stub文件。</p><p>patternset类型代表了一些列的pattern集合，通过它可以指定一些include用的pattern或者exclude用的pattern。这里我们队实例1进行一下改造，即示例2。</p><p>示例2：</p><pre><code class=language-java>&lt;patternset id=&quot;java.files.without.stubs&quot;&gt;
+   &lt;include name=&quot;src/**/*.java&quot;/&gt;
+   &lt;exclude name=&quot;src/**/*Stub*&quot;/&gt;
+&lt;/patternset&gt;
+
+&lt;fileset dir=&quot;${src}&quot; casesensitive=&quot;yes&quot;&gt;
+   &lt;patternset refid=&quot;java.files.without.stubs&quot;/&gt;
+&lt;/fileset&gt;
+</code></pre><p>通过patternset来指定pattern模式的方式有个好处，一个是更加直观，还有一个就是便于被复用。另外这里的pattern中可以使用的匹配符号包括：</p><table><thead><tr><th style=text-align:left>character</th><th style=text-align:left>desc</th></tr></thead><tbody><tr><td style=text-align:left>?</td><td style=text-align:left>可以匹配任意当个字符</td></tr><tr><td style=text-align:left>*</td><td style=text-align:left>可以匹配0个或者多个字符</td></tr><tr><td style=text-align:left>**</td><td style=text-align:left>可以匹配当前目录或者任意多级子目录（递归地哦）</td></tr></tbody></table><p>filelist类型与fileset有点类似但是又有不同。相同点是都是用于指定一个文件集合，不同点是fileset是通过pattern匹配的方式来完成包括、排除，而filelist是必须通过指定具体的文件名字，不能使用pattern进行匹配。</p><p>示例3：</p><pre><code class=language-java>&lt;filelist id=&quot;config.files&quot; dir=&quot;${webapp.src.folder}&quot;&gt;
+   &lt;file name=&quot;applicationConfig.xml&quot;/&gt;
+   &lt;file name=&quot;faces-config.xml&quot;/&gt;
+   &lt;file name=&quot;web.xml&quot;/&gt;
+   &lt;file name=&quot;portlet.xml&quot;/&gt;
+&lt;/filelist&gt;
+</code></pre><p>上面这里定义了一个文件列表，包括了<file>所指定的这些文件。</p><p>filterset类型往往用于筛选满足指定条件的文件，例如在copy任务中与fileset相结合拷贝指定版本的文件，看下这里的示例吧。</p><p>示例1：</p><pre><code class=language-java>&lt;copy todir=&quot;${output.dir}&quot;&gt;
+   &lt;fileset dir=&quot;${releasenotes.dir}&quot; includes=&quot;**/*.txt&quot;/&gt;
+   &lt;filterset&gt;
+      &lt;filter token=&quot;VERSION&quot; value=&quot;${current.version}&quot;/&gt;
+   &lt;/filterset&gt;
+&lt;/copy&gt;
+</code></pre><p>上面这个动作是要fileset中指定的发行笔记文件拷贝到输出目录${output.dir}中，但是呢，这里拷贝的时候只拷贝特定版本的发行笔记，只有与filter中匹配的版本才会被拷贝。</p><p>path数据类型用于指定classpath，它有个好处就是可以对多个可能的classpath entries通过具体的系统指定的分隔符进行连接，例如在windows下面通过分号进行连接，但是在linux下面通过冒号进行连接。</p><p>示例1：</p><pre><code class=language-java>&lt;path id=&quot;build.classpath.jar&quot;&gt;
+   &lt;pathelement path=&quot;${env.J2EE_HOME}/${j2ee.jar}&quot;/&gt;
+   &lt;fileset dir=&quot;lib&quot;&gt;
+      &lt;include name=&quot;**/*.jar&quot;/&gt;
+   &lt;/fileset&gt;
+&lt;/path&gt;
+</code></pre><p>上面这个示例就是将${J2EE_HOME}/${j2ee.jar}中的所有*.jar都看做是一个classpath entry，然后用系统对应的classpath分隔符进行连接，最终构成一个完整的classpath。</p><h3 id=5-ant的一个简单构建示例>5 Ant的一个简单构建示例 <a href=#5-ant%e7%9a%84%e4%b8%80%e4%b8%aa%e7%ae%80%e5%8d%95%e6%9e%84%e5%bb%ba%e7%a4%ba%e4%be%8b class=anchor aria-hidden=true>#</a><a href=#5-ant的一个简单构建示例 class=anchor aria-hidden=true>#</a></h3><p>下面看一个Ant构建的完整示例，首先要创建一个工程，工程结构如下：</p><pre><code class=language-java>+---db                // 数据库脚本目录
++---src               // 源代码目录
+.  +---faxapp
+.  +---dao
+.  +---entity
+.  +---util
+.  +---web
++---war               // 资源目录
+   +---images         // - 图片
+   +---js             // - js
+   +---META-INF       // - 其他
+   +---styles         // - css文件
+   +---WEB-INF
+      +---classes     // - 编译输出classes文件
+      +---jsp         // - 编写的jsp文件
+      +---lib         // - 应用的jar包
+</code></pre><p>对应的build.xml文件如下：</p><pre><code class=language-java>&lt;?xml version=&quot;1.0&quot;?&gt;
+&lt;project name=&quot;fax&quot; basedir=&quot;.&quot; default=&quot;build&quot;&gt;
+   &lt;property name=&quot;src.dir&quot; value=&quot;src&quot;/&gt;
+   &lt;property name=&quot;web.dir&quot; value=&quot;war&quot;/&gt;
+   &lt;property name=&quot;build.dir&quot; value=&quot;${web.dir}/WEB-INF/classes&quot;/&gt;
+   &lt;property name=&quot;name&quot; value=&quot;fax&quot;/&gt;
+   &lt;path id=&quot;master-classpath&quot;&gt;
+      &lt;fileset dir=&quot;${web.dir}/WEB-INF/lib&quot;&gt;
+         &lt;include name=&quot;*.jar&quot;/&gt;
+      &lt;/fileset&gt;
+      &lt;pathelement path=&quot;${build.dir}&quot;/&gt;
+   &lt;/path&gt;
+   &lt;target name=&quot;build&quot; description=&quot;Compile source tree java files&quot;&gt;
+      &lt;mkdir dir=&quot;${build.dir}&quot;/&gt;
+      &lt;javac destdir=&quot;${build.dir}&quot; source=&quot;1.5&quot; target=&quot;1.5&quot;&gt;
+         &lt;src path=&quot;${src.dir}&quot;/&gt;
+         &lt;classpath refid=&quot;master-classpath&quot;/&gt;
+      &lt;/javac&gt;
+   &lt;/target&gt;
+ 
+   &lt;target name=&quot;clean&quot; description=&quot;Clean output directories&quot;&gt;
+      &lt;delete&gt;
+         &lt;fileset dir=&quot;${build.dir}&quot;&gt;
+            &lt;include name=&quot;**/*.class&quot;/&gt;
+         &lt;/fileset&gt;
+      &lt;/delete&gt;
+   &lt;/target&gt;
+&lt;/project&gt;
+</code></pre><p>对于上面build.xml中用到的自定义属性，还需要创建对应的属性文件build.properties：</p><pre><code class=language-java>&lt;property name=&quot;src.dir&quot; value=&quot;src&quot;/&gt;
+&lt;property name=&quot;web.dir&quot; value=&quot;war&quot;/&gt;
+&lt;property name=&quot;build.dir&quot; value=&quot;${web.dir}/WEB-INF/classes&quot;/&gt;
+</code></pre><h3 id=6-ant构建文档>6 Ant构建文档 <a href=#6-ant%e6%9e%84%e5%bb%ba%e6%96%87%e6%a1%a3 class=anchor aria-hidden=true>#</a><a href=#6-ant构建文档 class=anchor aria-hidden=true>#</a></h3><p>Ant可以为工程生成文档，这个是利用javadoc命令行工具来对某些包某些类某些访问类型修饰符对应的成员或者方法根据源代码中添加的javadoc注释来生成项目API文档。下面是一个示例。</p><p>示例1：</p><pre><code class=language-java>&lt;target name = &quot;generate-javadoc&quot;&gt;
+   &lt;javadoc packagenames=&quot;faxapp.*&quot; sourcepath=&quot;${src.dir}&quot; 
+      destdir = &quot;doc&quot; version = &quot;true&quot; windowtitle = &quot;Fax Application&quot;&gt;
+      
+      &lt;doctitle&gt;&lt;![CDATA[= Fax Application =]]&gt;&lt;/doctitle&gt;
+      
+      &lt;bottom&gt;
+         &lt;![CDATA[Copyright © 2011. All Rights Reserved.]]&gt;
+      &lt;/bottom&gt;
+      
+      &lt;group title = &quot;util packages&quot; packages = &quot;faxapp.util.*&quot;/&gt;
+      &lt;group title = &quot;web packages&quot; packages = &quot;faxapp.web.*&quot;/&gt;
+      &lt;group title = &quot;data packages&quot; packages = &quot;faxapp.entity.*:faxapp.dao.*&quot;/&gt;
+   &lt;/javadoc&gt;
+   
+   &lt;echo message = &quot;java doc has been generated!&quot; /&gt;
+&lt;/target&gt;
+</code></pre><h3 id=7-ant构建jar包>7 Ant构建jar包 <a href=#7-ant%e6%9e%84%e5%bb%bajar%e5%8c%85 class=anchor aria-hidden=true>#</a><a href=#7-ant构建jar包 class=anchor aria-hidden=true>#</a></h3><p>Ant将classes达成jar包示例，例如将faxapp/util下面的除Test.class之外的所有文件达成一个jar包${web.dir}/lib/util.jar。</p><p>示例1：</p><pre><code class=language-java>&lt;jar destfile = &quot;${web.dir}/lib/util.jar&quot;
+ basedir = &quot;${build.dir}/classes&quot;
+ includes = &quot;faxapp/util/**&quot;
+ excludes = &quot;**/Test.class&quot; /&gt;
+</code></pre><p>如果是希望将util.jar打包成一个可以执行的jar文件的话，需要为其指定main-class，这里可以通过添加manifest来完成。</p><p>示例2：</p><pre><code class=language-java>&lt;jar destfile = &quot;${web.dir}/lib/util.jar&quot;
+   basedir = &quot;${build.dir}/classes&quot;
+   includes = &quot;faxapp/util/**&quot;
+   excludes = &quot;**/Test.class&quot;&gt;
+   
+   &lt;manifest&gt;
+      &lt;attribute name = &quot;Main-Class&quot; value = &quot;com.tutorialspoint.util.FaxUtil&quot;/&gt;
+   &lt;/manifest&gt;
+   
+&lt;/jar&gt;
+</code></pre><p>最后呢，将上述jar翻到一个target里面：</p><pre><code class=language-java>&lt;target name=&quot;build-jar&quot;&gt;
+   &lt;jar destfile=&quot;${web.dir}/lib/util.jar&quot;
+      basedir=&quot;${build.dir}/classes&quot;
+      includes=&quot;faxapp/util/**&quot;
+      excludes=&quot;**/Test.class&quot;&gt;
+      &lt;manifest&gt;
+         &lt;attribute name=&quot;Main-Class&quot; value=&quot;com.tutorialspoint.util.FaxUtil&quot;/&gt;
+      &lt;/manifest&gt;
+   &lt;/jar&gt;
+&lt;/target&gt;
+</code></pre><h3 id=8-ant构建war包>8 Ant构建war包 <a href=#8-ant%e6%9e%84%e5%bb%bawar%e5%8c%85 class=anchor aria-hidden=true>#</a><a href=#8-ant构建war包 class=anchor aria-hidden=true>#</a></h3><p>除了上面提到的构建jar包之外，Ant也可以用来构建war包，我们这里只给出一个详细的war包构建配置文件，不再详细展开。</p><p>示例1：</p><pre><code class=language-java>&lt;target name=&quot;build-war&quot;&gt;
+   &lt;war destfile=&quot;fax.war&quot; webxml=&quot;${web.dir}/web.xml&quot;&gt;
+      &lt;fileset dir=&quot;${web.dir}/WebContent&quot;&gt;
+         &lt;include name=&quot;**/*.*&quot;/&gt;
+      &lt;/fileset&gt;
+      
+      &lt;lib dir=&quot;thirdpartyjars&quot;&gt;
+         &lt;exclude name=&quot;portlet.jar&quot;/&gt;
+      &lt;/lib&gt;
+      
+      &lt;classes dir=&quot;${build.dir}/web&quot;/&gt;
+   &lt;/war&gt;
+   
+&lt;/target&gt;
+</code></pre><h3 id=9-ant的一个完整buildxml配置>9 Ant的一个完整build.xml配置 <a href=#9-ant%e7%9a%84%e4%b8%80%e4%b8%aa%e5%ae%8c%e6%95%b4buildxml%e9%85%8d%e7%bd%ae class=anchor aria-hidden=true>#</a><a href=#9-ant的一个完整buildxml配置 class=anchor aria-hidden=true>#</a></h3><p>这里给出了一个综合配置示例，对前面说描述的内容进行了一下综合。</p><pre><code class=language-java>&lt;?xml version = &quot;1.0&quot;?&gt;
+&lt;project name = &quot;fax&quot; basedir = &quot;.&quot; default = &quot;usage&quot;&gt;
+   &lt;property file = &quot;build.properties&quot;/&gt;
+   &lt;property name = &quot;src.dir&quot; value = &quot;src&quot;/&gt;
+   &lt;property name = &quot;web.dir&quot; value = &quot;war&quot;/&gt;
+   &lt;property name = &quot;javadoc.dir&quot; value = &quot;doc&quot;/&gt;
+   &lt;property name = &quot;build.dir&quot; value = &quot;${web.dir}/WEB-INF/classes&quot;/&gt;
+   &lt;property name = &quot;name&quot; value = &quot;fax&quot;/&gt;
+   &lt;path id = &quot;master-classpath&quot;&gt;
+      &lt;fileset dir = &quot;${web.dir}/WEB-INF/lib&quot;&gt;
+         &lt;include name = &quot;*.jar&quot;/&gt;
+      &lt;/fileset&gt;
+      &lt;pathelement path = &quot;${build.dir}&quot;/&gt;
+   &lt;/path&gt;
+    
+   &lt;target name = &quot;javadoc&quot;&gt;
+      &lt;javadoc packagenames = &quot;faxapp.*&quot; sourcepath = &quot;${src.dir}&quot; 
+         destdir = &quot;doc&quot; version = &quot;true&quot; windowtitle = &quot;Fax Application&quot;&gt;
+         
+         &lt;doctitle&gt;&lt;![CDATA[&lt;h1&gt; =  Fax Application  = &lt;/h1&gt;]]&gt;
+         &lt;/doctitle&gt;
+         &lt;bottom&gt;&lt;![CDATA[Copyright © 2011. All Rights Reserved.]]&gt;
+         &lt;/bottom&gt;
+         &lt;group title = &quot;util packages&quot; packages = &quot;faxapp.util.*&quot;/&gt;
+         &lt;group title = &quot;web packages&quot; packages = &quot;faxapp.web.*&quot;/&gt; 
+         &lt;group title = &quot;data packages&quot; packages = &quot;faxapp.entity.*:faxapp.dao.*&quot;/&gt;
+      &lt;/javadoc&gt;
+   &lt;/target&gt;
+   &lt;target name = &quot;usage&quot;&gt;
+      &lt;echo message = &quot;&quot;/&gt;
+      &lt;echo message = &quot;${name} build file&quot;/&gt;
+      &lt;echo message = &quot;-----------------------------------&quot;/&gt;
+      &lt;echo message = &quot;&quot;/&gt;
+      &lt;echo message = &quot;Available targets are:&quot;/&gt;
+      &lt;echo message = &quot;&quot;/&gt;
+      &lt;echo message = &quot;deploy    --&gt; Deploy application as directory&quot;/&gt;
+      &lt;echo message = &quot;deploywar --&gt; Deploy application as a WAR file&quot;/&gt;
+      &lt;echo message = &quot;&quot;/&gt;
+   &lt;/target&gt;
+   &lt;target name = &quot;build&quot; description = &quot;Compile main source tree java files&quot;&gt;
+      &lt;mkdir dir = &quot;${build.dir}&quot;/&gt;
+      
+      &lt;javac destdir = &quot;${build.dir}&quot; source = &quot;1.5&quot; target = &quot;1.5&quot; debug = &quot;true&quot;
+         deprecation = &quot;false&quot; optimize = &quot;false&quot; failonerror = &quot;true&quot;&gt;
+         
+         &lt;src path = &quot;${src.dir}&quot;/&gt;
+         &lt;classpath refid = &quot;master-classpath&quot;/&gt;
+         
+      &lt;/javac&gt;
+   &lt;/target&gt;
+   &lt;target name = &quot;deploy&quot; depends = &quot;build&quot; description = &quot;Deploy application&quot;&gt;
+      &lt;copy todir = &quot;${deploy.path}/${name}&quot; preservelastmodified = &quot;true&quot;&gt;
+         &lt;fileset dir = &quot;${web.dir}&quot;&gt;
+            &lt;include name = &quot;**/*.*&quot;/&gt;
+         &lt;/fileset&gt;
+      &lt;/copy&gt;
+   &lt;/target&gt;
+   &lt;target name = &quot;deploywar&quot; depends = &quot;build&quot; description = &quot;Deploy application as a WAR file&quot;&gt;
+   
+      &lt;war destfile = &quot;${name}.war&quot; webxml = &quot;${web.dir}/WEB-INF/web.xml&quot;&gt;
+         &lt;fileset dir = &quot;${web.dir}&quot;&gt;
+            &lt;include name = &quot;**/*.*&quot;/&gt;
+         &lt;/fileset&gt;
+      &lt;/war&gt;
+      
+      &lt;copy todir = &quot;${deploy.path}&quot; preservelastmodified = &quot;true&quot;&gt;
+         &lt;fileset dir = &quot;.&quot;&gt;
+            &lt;include name = &quot;*.war&quot;/&gt;
+         &lt;/fileset&gt;
+      &lt;/copy&gt;
+      
+   &lt;/target&gt;
+    
+   &lt;target name = &quot;clean&quot; description = &quot;Clean output directories&quot;&gt;
+      &lt;delete&gt;
+         &lt;fileset dir = &quot;${build.dir}&quot;&gt;
+            &lt;include name = &quot;**/*.class&quot;/&gt;
+         &lt;/fileset&gt;
+      &lt;/delete&gt;
+   &lt;/target&gt;
+   
+&lt;/project&gt;
+</code></pre><h3 id=10-ant的一个更完整配置示例>10 Ant的一个更完整配置示例 <a href=#10-ant%e7%9a%84%e4%b8%80%e4%b8%aa%e6%9b%b4%e5%ae%8c%e6%95%b4%e9%85%8d%e7%bd%ae%e7%a4%ba%e4%be%8b class=anchor aria-hidden=true>#</a><a href=#10-ant的一个更完整配置示例 class=anchor aria-hidden=true>#</a></h3><p>这里针对war包与tomcat的结合给出一个配置示例。</p><p>build.properties：</p><pre><code class=language-java># Ant properties for building the springapp
+appserver.home=c:\\install\\apache-tomcat-7.0.19
+# for Tomcat 5 use $appserver.home}/server/lib
+# for Tomcat 6 use $appserver.home}/lib
+appserver.lib=${appserver.home}/lib
+deploy.path=${appserver.home}/webapps
+tomcat.manager.url=http://www.tutorialspoint.com:8080/manager
+tomcat.manager.username=tutorialspoint
+tomcat.manager.password=secret
+</code></pre><p>build.xml:</p><pre><code class=language-java>&lt;?xml version=&quot;1.0&quot;?&gt;
+&lt;project name=&quot;fax&quot; basedir=&quot;.&quot; default=&quot;usage&quot;&gt;
+   &lt;property file=&quot;build.properties&quot;/&gt;
+   &lt;property name=&quot;src.dir&quot; value=&quot;src&quot;/&gt;
+   &lt;property name=&quot;web.dir&quot; value=&quot;war&quot;/&gt;
+   &lt;property name=&quot;javadoc.dir&quot; value=&quot;doc&quot;/&gt;
+   &lt;property name=&quot;build.dir&quot; value=&quot;${web.dir}/WEB-INF/classes&quot;/&gt;
+   &lt;property name=&quot;name&quot; value=&quot;fax&quot;/&gt;
+   &lt;path id=&quot;master-classpath&quot;&gt;
+      &lt;fileset dir=&quot;${web.dir}/WEB-INF/lib&quot;&gt;
+         &lt;include name=&quot;*.jar&quot;/&gt;
+      &lt;/fileset&gt;
+   &lt;pathelement path=&quot;${build.dir}&quot;/&gt;
+   &lt;/path&gt;
+    
+   &lt;target name=&quot;javadoc&quot;&gt;
+      &lt;javadoc packagenames=&quot;faxapp.*&quot; sourcepath=&quot;${src.dir}&quot; 
+         destdir=&quot;doc&quot; version=&quot;true&quot; windowtitle=&quot;Fax Application&quot;&gt;
+         &lt;doctitle&gt;&lt;![CDATA[&lt;h1&gt;= Fax Application = &lt;/h1&gt;]]&gt;&lt;/doctitle&gt;
+         &lt;bottom&gt;&lt;![CDATA[Copyright © 2011. All Rights Reserved.]]&gt;&lt;/bottom&gt;
+         &lt;group title=&quot;util packages&quot; packages=&quot;faxapp.util.*&quot;/&gt;
+         &lt;group title=&quot;web packages&quot; packages=&quot;faxapp.web.*&quot;/&gt;
+         &lt;group title=&quot;data packages&quot; packages=&quot;faxapp.entity.*:faxapp.dao.*&quot;/&gt;
+      &lt;/javadoc&gt;
+   &lt;/target&gt;
+   &lt;target name=&quot;usage&quot;&gt;
+   &lt;echo message=&quot;&quot;/&gt;
+   &lt;echo message=&quot;${name} build file&quot;/&gt;
+   &lt;echo message=&quot;-----------------------------------&quot;/&gt;
+   &lt;echo message=&quot;&quot;/&gt;
+   &lt;echo message=&quot;Available targets are:&quot;/&gt;
+   &lt;echo message=&quot;&quot;/&gt;
+   &lt;echo message=&quot;deploy    --&gt; Deploy application as directory&quot;/&gt;
+   &lt;echo message=&quot;deploywar --&gt; Deploy application as a WAR file&quot;/&gt;
+   &lt;echo message=&quot;&quot;/&gt;
+   &lt;/target&gt;
+   &lt;target name=&quot;build&quot; description=&quot;Compile main source tree java files&quot;&gt;
+   &lt;mkdir dir=&quot;${build.dir}&quot;/&gt;
+      &lt;javac destdir=&quot;${build.dir}&quot; source=&quot;1.5&quot; target=&quot;1.5&quot; debug=&quot;true&quot;
+         deprecation=&quot;false&quot; optimize=&quot;false&quot; failonerror=&quot;true&quot;&gt;
+         &lt;src path=&quot;${src.dir}&quot;/&gt;
+         &lt;classpath refid=&quot;master-classpath&quot;/&gt;
+      &lt;/javac&gt;
+   &lt;/target&gt;
+   &lt;target name=&quot;deploy&quot; depends=&quot;build&quot; description=&quot;Deploy application&quot;&gt;
+      &lt;copy todir=&quot;${deploy.path}/${name}&quot; 
+         preservelastmodified=&quot;true&quot;&gt;
+         &lt;fileset dir=&quot;${web.dir}&quot;&gt;
+            &lt;include name=&quot;**/*.*&quot;/&gt;
+         &lt;/fileset&gt;
+      &lt;/copy&gt;
+   &lt;/target&gt;
+   &lt;target name=&quot;deploywar&quot; depends=&quot;build&quot; description=&quot;Deploy application as a WAR file&quot;&gt;
+      &lt;war destfile=&quot;${name}.war&quot; webxml=&quot;${web.dir}/WEB-INF/web.xml&quot;&gt;
+         &lt;fileset dir=&quot;${web.dir}&quot;&gt;
+            &lt;include name=&quot;**/*.*&quot;/&gt;
+         &lt;/fileset&gt;
+      &lt;/war&gt;
+      
+      &lt;copy todir=&quot;${deploy.path}&quot; preservelastmodified=&quot;true&quot;&gt;
+         &lt;fileset dir=&quot;.&quot;&gt;
+            &lt;include name=&quot;*.war&quot;/&gt;
+         &lt;/fileset&gt;
+      &lt;/copy&gt;
+   &lt;/target&gt;
+    
+   &lt;target name=&quot;clean&quot; description=&quot;Clean output directories&quot;&gt;
+      &lt;delete&gt;
+         &lt;fileset dir=&quot;${build.dir}&quot;&gt;
+            &lt;include name=&quot;**/*.class&quot;/&gt;
+         &lt;/fileset&gt;
+      &lt;/delete&gt;
+   &lt;/target&gt;
+</code></pre><p>war包相关的定义已经全部给出了，这里还需要给出tomcat相关的部分定义，还是在build.xml里面。</p><pre><code class=language-java>    &lt;!-- ============================================================ --&gt;
+    &lt;!-- Tomcat tasks --&gt;
+    &lt;!-- ============================================================ --&gt;
+    &lt;path id=&quot;catalina-ant-classpath&quot;&gt;
+        &lt;!-- We need the Catalina jars for Tomcat --&gt;
+        &lt;!--  * for other app servers - check the docs --&gt;
+        &lt;fileset dir=&quot;${appserver.lib}&quot;&gt;
+            &lt;include name=&quot;catalina-ant.jar&quot;/&gt;
+        &lt;/fileset&gt;
+    &lt;/path&gt;
+    &lt;taskdef name=&quot;install&quot; classname=&quot;org.apache.catalina.ant.InstallTask&quot;&gt;
+        &lt;classpath refid=&quot;catalina-ant-classpath&quot;/&gt;
+    &lt;/taskdef&gt;
+    &lt;taskdef name=&quot;reload&quot; classname=&quot;org.apache.catalina.ant.ReloadTask&quot;&gt;
+        &lt;classpath refid=&quot;catalina-ant-classpath&quot;/&gt;
+    &lt;/taskdef&gt;
+    &lt;taskdef name=&quot;list&quot; classname=&quot;org.apache.catalina.ant.ListTask&quot;&gt;
+        &lt;classpath refid=&quot;catalina-ant-classpath&quot;/&gt;
+    &lt;/taskdef&gt;
+    &lt;taskdef name=&quot;start&quot; classname=&quot;org.apache.catalina.ant.StartTask&quot;&gt;
+        &lt;classpath refid=&quot;catalina-ant-classpath&quot;/&gt;
+    &lt;/taskdef&gt;
+    &lt;taskdef name=&quot;stop&quot; classname=&quot;org.apache.catalina.ant.StopTask&quot;&gt;
+        &lt;classpath refid=&quot;catalina-ant-classpath&quot;/&gt;
+    &lt;/taskdef&gt;
+    &lt;target name=&quot;reload&quot; description=&quot;Reload application in Tomcat&quot;&gt;
+        &lt;reload url=&quot;${tomcat.manager.url}&quot;username=&quot;${tomcat.manager.username}&quot;
+          password=&quot;${tomcat.manager.password}&quot; path=&quot;/${name}&quot;/&gt;
+    &lt;/target&gt;
+&lt;/project&gt;
+</code></pre><p>下面对tomcat相关的几个targe他进行一下描述：</p><table><thead><tr><th style=text-align:center>task</th><th style=text-align:center>desc</th></tr></thead><tbody><tr><td style=text-align:center>InstallTask</td><td style=text-align:center>Installs a web application. Class Name: org.apache.catalina.ant.InstallTask</td></tr><tr><td style=text-align:center>ReloadTask</td><td style=text-align:center>Reload a web application. Class Name: org.apache.catalina.ant.ReloadTask</td></tr><tr><td style=text-align:center>ListTask</td><td style=text-align:center>Lists all web applications. Class Name: org.apache.catalina.ant.ListTask</td></tr><tr><td style=text-align:center>StartTask</td><td style=text-align:center>Starts a web application. Class Name: org.apache.catalina.ant.StartTask</td></tr><tr><td style=text-align:center>StopTask</td><td style=text-align:center>Stops a web application. Class Name: org.apache.catalina.ant.StopTask</td></tr><tr><td style=text-align:center>ReloadTask</td><td style=text-align:center>Reloads a web application without stopping. Class Name: org.apache.catalina.ant.ReloadTask</td></tr></tbody></table><h3 id=11-ant执行程序>11 Ant执行程序 <a href=#11-ant%e6%89%a7%e8%a1%8c%e7%a8%8b%e5%ba%8f class=anchor aria-hidden=true>#</a><a href=#11-ant执行程序 class=anchor aria-hidden=true>#</a></h3><p>下面给出一个Ant传递参数并执行程序的配置示例。</p><p>java类：</p><pre><code class=language-java>public class NotifyAdministrator
+{
+   public static void main(String[] args)
+   {
+      String email = args[0];
+      notifyAdministratorviaEmail(email);
+      System.out.println(&quot;Administrator &quot;+email+&quot; has been notified&quot;);
+   }
+   public static void notifyAdministratorviaEmail(String email
+   { 
+       //......
+   }
+}
+</code></pre><p>build.xml配置文件如下：</p><pre><code class=language-java>&lt;?xml version=&quot;1.0&quot;?&gt;
+&lt;project name=&quot;sample&quot; basedir=&quot;.&quot; default=&quot;notify&quot;&gt;
+   &lt;target name=&quot;notify&quot;&gt;
+      &lt;java fork=&quot;true&quot; failonerror=&quot;yes&quot; classname=&quot;NotifyAdministrator&quot;&gt;
+         &lt;arg line=&quot;admin@test.com&quot;/&gt;
+      &lt;/java&gt;
+   &lt;/target&gt;
+&lt;/project&gt;
+</code></pre><h3 id=12-扩展ant>12 扩展Ant <a href=#12-%e6%89%a9%e5%b1%95ant class=anchor aria-hidden=true>#</a><a href=#12-扩展ant class=anchor aria-hidden=true>#</a></h3><p>Ant中有一些自定义的task，但是我们也可以自己定义task并在target中使用，下面是一个示例。</p><p>java代码：</p><pre><code class=language-java>package com.tutorialspoint.ant;
+import org.apache.tools.ant.Task;
+import org.apache.tools.ant.Project;
+import org.apache.tools.ant.BuildException;
+public class MyTask extends Task {
+   String message;
+   public void execute() throws BuildException {
+      log(&quot;Message: &quot; + message, Project.MSG_INFO);
+   }
+   
+   public void setMessage(String message) {
+      this.message= message;
+   }
+}
+</code></pre><p>build.xml：</p><pre><code class=language-java>&lt;target name=&quot;custom&quot;&gt;
+   &lt;taskdef name=&quot;custom&quot; classname=&quot;com.tutorialspoint.ant.MyTask&quot; /&gt;
+   &lt;custom message=&quot;Hello World!&quot;/&gt;
+&lt;/target&gt;
+</code></pre><h3 id=13-在ide中使用ant>13 在IDE中使用Ant <a href=#13-%e5%9c%a8ide%e4%b8%ad%e4%bd%bf%e7%94%a8ant class=anchor aria-hidden=true>#</a><a href=#13-在ide中使用ant class=anchor aria-hidden=true>#</a></h3><p>在IDE中使用Ant也是一种不错的选择，目前的主流开发工具Eclipse和Idea都继承了Ant构建插件，开发人员可以根据自己的情况选择使用。</p><p>参考内容：</p><p>[<a href=https://www.tutorialspoint.com/ant/index.htm>1</a>] TutorialsPoint: Learn Apache Ant</p><div class=edit-page><a href=https://github.com/hitzhangjie/myspace/blob/master/content/blog/2017-04-01-%e5%ad%a6%e4%b9%a0Apache-Ant.md><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentcolor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-edit-2"><path d="M17 3a2.828 2.828.0 114 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>Edit this page on GitHub</a></div><div class="docs-navigation d-flex justify-content-between"><a href=/blog/2017-04-20-%E5%AD%A6%E4%B9%A0java-nio/><div class="card my-1"><div class="card-body py-2">&larr; Java NIO Tutorials</div></div></a><a class=ms-auto href=/blog/2017-03-27-jmp_bufsetjmplongjmp/><div class="card my-1"><div class="card-body py-2">jmp_buf & setjmp & longjmp &rarr;</div></div></a></div></main></div></div></div><footer class="footer text-muted"><div class=container-xxl><div class=row><div class="col-lg-8 order-last order-lg-first"><ul class=list-inline><li class=list-inline-item>Powered by <a class=text-muted href=https://www.netlify.com/>Netlify</a>, <a class=text-muted href=https://gohugo.io/>Hugo</a>, and <a class=text-muted href=https://getdoks.org/>Doks</a></li></ul></div><div class="col-lg-8 order-first order-lg-last text-lg-end"><ul class=list-inline></ul></div><div class=col-lg-8 align=right><p><font size=-1>站点构建版本：v</font></p></div></div></div></footer><script src=/js/bootstrap.min.fdbe9b9ba88a036135318f3c721784d684ac9e3280fe282cc80d7d49f7f9c82780cd54228c1608685a230c09984300d7946fc471734d566fcebc148b65bd16db.js integrity="sha512-/b6bm6iKA2E1MY88cheE1oSsnjKA/igsyA19Sff5yCeAzVQijBYIaFojDAmYQwDXlG/EcXNNVm/OvBSLZb0W2w==" crossorigin=anonymous defer></script>
+<script src=/js/highlight.min.451fe6185924dcedf55c767559b5130f666f31c989f0078a75bafc346ad7364e180edfd731b1ca6bae0e90dfee88842885d284126ab0879f5067399e3a02b09e.js integrity="sha512-RR/mGFkk3O31XHZ1WbUTD2ZvMcmJ8AeKdbr8NGrXNk4YDt/XMbHKa64OkN/uiIQohdKEEmqwh59QZzmeOgKwng==" crossorigin=anonymous defer></script>
+<script src=/main.min.f16ffd9b364013a1df84be9cd7a45c470cb48639766bf5551e05bba845fe4ab150cb6436de43609bfed9af47c23bd5e395e9a10b932fa6fb2c4ee8f6cc78d7a3.js integrity="sha512-8W/9mzZAE6HfhL6c16RcRwy0hjl2a/VVHgW7qEX+SrFQy2Q23kNgm/7Zr0fCO9XjlemhC5MvpvssTuj2zHjXow==" crossorigin=anonymous defer></script>
+<script src=/index.min.4f5da6d5d5039814b7640914dc6d7af9b1826b54a2e8027123e345920f33e3dab6f98ed3b275444c8e3ce3de9faa12475d34fad04a0140d0a99b28e75bc5267c.js integrity="sha512-T12m1dUDmBS3ZAkU3G16+bGCa1Si6AJxI+NFkg8z49q2+Y7TsnVETI48496fqhJHXTT60EoBQNCpmyjnW8UmfA==" crossorigin=anonymous defer></script></body></html>

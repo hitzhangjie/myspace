@@ -1,0 +1,301 @@
+<!doctype html><html lang=en-us><head><meta charset=utf-8><meta http-equiv=x-ua-compatible content="ie=edge"><meta name=viewport content="width=device-width,initial-scale=1,shrink-to-fit=no"><link rel=preload as=font href=/fonts/vendor/jost/jost-v4-latin-regular.woff2 type=font/woff2 crossorigin><link rel=preload as=font href=/fonts/vendor/jost/jost-v4-latin-500.woff2 type=font/woff2 crossorigin><link rel=preload as=font href=/fonts/vendor/jost/jost-v4-latin-700.woff2 type=font/woff2 crossorigin><link rel=stylesheet href=/main.63b6b8ff933309fcc94a30e21d69932290c8643fa1a32893f5681778c776ed3e51c237a1acd00b42426b3bf780c351b4a6ce75b3b659915ef0dd610b2e027a8c.css integrity="sha512-Y7a4/5MzCfzJSjDiHWmTIpDIZD+hoyiT9WgXeMd27T5RwjehrNALQkJrO/eAw1G0ps51s7ZZkV7w3WELLgJ6jA==" crossorigin=anonymous><noscript><style>img.lazyload{display:none}</style></noscript><meta name=robots content="index, follow"><meta name=googlebot content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1"><meta name=bingbot content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1"><title>go程序如何实现热重启 - MySpace</title><meta name=description content="最近在优化公司框架trpc时发现了一个热重启相关的问题，优化之余也总结沉淀下，对go如何实现热重启这方面的内容做一个简单的梳理。
+1.什么是热重启？ # 热重启（Hot Restart），是一项保证服务可用性的手段。它允许服务重启期间，不中断已经建立的连接，老服务进程不再接受新连接请求，新连接请求将在新服务进程中受理。对于原服务进程中已经建立的连接，也可以将其设为读关闭，等待平滑处理完连接上的请求及连接空闲后再行退出。通过这种方式，可以保证已建立的连接不中断，连接上的事务（请求、处理、响应）可以正常完成，新的服务进程也可以正常接受连接、处理连接上的请求。当然，热重启期间进程平滑退出涉及到的不止是连接上的事务，也有消息服务、自定义事务需要关注。
+这是我理解的热重启的一个大致描述。热重启现在还有没有存在的必要？我的理解是看场景。
+以后台开发为例，假如运维平台有能力在服务升级、重启时自动踢掉流量，服务就绪后又自动加回流量，假如能够合理预估服务QPS、请求处理时长，那么只要配置一个合理的停止前等待时间，是可以达到类似热重启的效果的。这样的话，在后台服务里面支持热重启就显得没什么必要。但是，如果我们开发一个微服务框架，不能对将来的部署平台、环境做这种假设，也有可能使用方只是部署在一两台物理机上，也没有其他的负载均衡设施，但不希望因为重启受干扰，热重启就很有必要。当然还有一些更复杂、要求更苛刻的场景，也需要热重启的能力。
+热重启是比较重要的一项保证服务质量的手段，还是值得了解下的，这也是本文介绍的初衷。
+2.如何实现热重启？ # 如何实现热重启，这里其实不能一概而论，要结合实际的场景来看（比如服务编程模型、对可用性要求的高低等）。大致的实现思路，可以先抛一下。
+一般要实现热重启，大致要包括如下步骤：
+ 首先，要让老进程，这里称之为父进程了，先要fork出一个子进程来代替它工作； 然后，子进程就绪之后，通知父进程，正常接受新连接请求、处理连接上收到的请求； 再然后，父进程处理完已建立连接上的请求后、连接空闲后，平滑退出。  听上去是挺简单的&amp;hellip;
+2.1.认识fork # 大家都知道fork() 系统调用，父进程调用fork会创建一个进程副本，代码中还可以通过fork返回值是否为0来区分是子进程还是父进程。
+int main(char **argv, int argc) { pid_t pid = fork(); if (pid == 0) { printf(&amp;quot;i am child process&amp;quot;); } else { printf(&amp;quot;i am parent process, i have a child process named %d&amp;quot;, pid); } }  可能有些开发人员不知道fork的实现原理，或者不知道fork返回值为什么在父子进程中不同，或者不知道如何做到父子进程中返回值不同……了解这些是要有点知识积累的。
+2.2.返回值 # 简单概括下，ABI定义了进行函数调用时的一些规范，如何传递参数，如何返回值等等，以x86为例，如果返回值是rax寄存器能够容的一般都是通过rax寄存器返回的。
+如果rax寄存器位宽无法容纳下的返回值呢？也简单，编译器会安插些指令来完成这些神秘的操作，具体是什么指令，就跟语言编译器实现相关了。
+ c语言，可能会将返回值的地址，传递到rdi或其他寄存器，被调函数内部呢，通过多条指令将返回值写入rdi代指的内存区； c语言，也可能在被调函数内部，用多个寄存器rax,rdx&amp;hellip;一起暂存返回结果，函数返回时再将多个寄存器的值赋值到变量中； 也可能会像golang这样，通过栈内存来返回；  2.3.fork返回值 # fork系统调用的返回值，有点特殊，在父进程和子进程中，这个函数返回的值是不同的，如何做到的呢？"><link rel=canonical href=/blog/2020-08-28-go%E7%A8%8B%E5%BA%8F%E5%A6%82%E4%BD%95%E5%AE%9E%E7%8E%B0%E7%83%AD%E9%87%8D%E5%90%AF/><meta property="og:locale" content="en_US"><meta property="og:type" content="article"><meta property="og:title" content="go程序如何实现热重启"><meta property="og:description" content="最近在优化公司框架trpc时发现了一个热重启相关的问题，优化之余也总结沉淀下，对go如何实现热重启这方面的内容做一个简单的梳理。
+1.什么是热重启？ # 热重启（Hot Restart），是一项保证服务可用性的手段。它允许服务重启期间，不中断已经建立的连接，老服务进程不再接受新连接请求，新连接请求将在新服务进程中受理。对于原服务进程中已经建立的连接，也可以将其设为读关闭，等待平滑处理完连接上的请求及连接空闲后再行退出。通过这种方式，可以保证已建立的连接不中断，连接上的事务（请求、处理、响应）可以正常完成，新的服务进程也可以正常接受连接、处理连接上的请求。当然，热重启期间进程平滑退出涉及到的不止是连接上的事务，也有消息服务、自定义事务需要关注。
+这是我理解的热重启的一个大致描述。热重启现在还有没有存在的必要？我的理解是看场景。
+以后台开发为例，假如运维平台有能力在服务升级、重启时自动踢掉流量，服务就绪后又自动加回流量，假如能够合理预估服务QPS、请求处理时长，那么只要配置一个合理的停止前等待时间，是可以达到类似热重启的效果的。这样的话，在后台服务里面支持热重启就显得没什么必要。但是，如果我们开发一个微服务框架，不能对将来的部署平台、环境做这种假设，也有可能使用方只是部署在一两台物理机上，也没有其他的负载均衡设施，但不希望因为重启受干扰，热重启就很有必要。当然还有一些更复杂、要求更苛刻的场景，也需要热重启的能力。
+热重启是比较重要的一项保证服务质量的手段，还是值得了解下的，这也是本文介绍的初衷。
+2.如何实现热重启？ # 如何实现热重启，这里其实不能一概而论，要结合实际的场景来看（比如服务编程模型、对可用性要求的高低等）。大致的实现思路，可以先抛一下。
+一般要实现热重启，大致要包括如下步骤：
+ 首先，要让老进程，这里称之为父进程了，先要fork出一个子进程来代替它工作； 然后，子进程就绪之后，通知父进程，正常接受新连接请求、处理连接上收到的请求； 再然后，父进程处理完已建立连接上的请求后、连接空闲后，平滑退出。  听上去是挺简单的&mldr;
+2.1.认识fork # 大家都知道fork() 系统调用，父进程调用fork会创建一个进程副本，代码中还可以通过fork返回值是否为0来区分是子进程还是父进程。
+int main(char **argv, int argc) { pid_t pid = fork(); if (pid == 0) { printf(&#34;i am child process&#34;); } else { printf(&#34;i am parent process, i have a child process named %d&#34;, pid); } }  可能有些开发人员不知道fork的实现原理，或者不知道fork返回值为什么在父子进程中不同，或者不知道如何做到父子进程中返回值不同……了解这些是要有点知识积累的。
+2.2.返回值 # 简单概括下，ABI定义了进行函数调用时的一些规范，如何传递参数，如何返回值等等，以x86为例，如果返回值是rax寄存器能够容的一般都是通过rax寄存器返回的。
+如果rax寄存器位宽无法容纳下的返回值呢？也简单，编译器会安插些指令来完成这些神秘的操作，具体是什么指令，就跟语言编译器实现相关了。
+ c语言，可能会将返回值的地址，传递到rdi或其他寄存器，被调函数内部呢，通过多条指令将返回值写入rdi代指的内存区； c语言，也可能在被调函数内部，用多个寄存器rax,rdx&mldr;一起暂存返回结果，函数返回时再将多个寄存器的值赋值到变量中； 也可能会像golang这样，通过栈内存来返回；  2.3.fork返回值 # fork系统调用的返回值，有点特殊，在父进程和子进程中，这个函数返回的值是不同的，如何做到的呢？"><meta property="og:url" content="/blog/2020-08-28-go%E7%A8%8B%E5%BA%8F%E5%A6%82%E4%BD%95%E5%AE%9E%E7%8E%B0%E7%83%AD%E9%87%8D%E5%90%AF/"><meta property="og:site_name" content="MySpace"><meta property="article:published_time" content="2020-08-28T03:36:59+08:00"><meta property="article:modified_time" content="2020-08-28T03:36:59+08:00"><meta property="og:image" content="/doks.png"><meta property="og:image:alt" content="MySpace"><meta name=twitter:card content="summary_large_image"><meta name=twitter:site content="@hitzhangjie"><meta name=twitter:creator content="@hitzhangjie"><meta name=twitter:title content="go程序如何实现热重启"><meta name=twitter:description content><meta name=twitter:image content="/doks.png"><meta name=twitter:image:alt content="go程序如何实现热重启"><script type=application/ld+json>{"@context":"https://schema.org","@graph":[{"@type":"Person","@id":"/#/schema/person/1","name":"","url":"/","sameAs":["https://twitter.com/hitzhangjie","https://www.linkedin.com/in/hitzhangjie/","https://github.com/hitzhangjie"],"image":{"@type":"ImageObject","@id":"/#/schema/image/1","url":"/\u003cnil\u003e","width":null,"height":null,"caption":""}},{"@type":"WebSite","@id":"/#/schema/website/1","url":"/","name":"MySpace","description":"MySpace is a hitzhangjie\u0027s personal space, for blogs, books, journey, thinkings.","publisher":{"@id":"/#/schema/person/1"}},{"@type":"WebPage","@id":"/blog/2020-08-28-go%E7%A8%8B%E5%BA%8F%E5%A6%82%E4%BD%95%E5%AE%9E%E7%8E%B0%E7%83%AD%E9%87%8D%E5%90%AF/","url":"/blog/2020-08-28-go%E7%A8%8B%E5%BA%8F%E5%A6%82%E4%BD%95%E5%AE%9E%E7%8E%B0%E7%83%AD%E9%87%8D%E5%90%AF/","name":"go程序如何实现热重启","description":"","isPartOf":{"@id":"/#/schema/website/1"},"about":{"@id":"/#/schema/person/1"},"datePublished":"2020-08-28T03:36:59CET","dateModified":"2020-08-28T03:36:59CET","breadcrumb":{"@id":"/blog/2020-08-28-go%E7%A8%8B%E5%BA%8F%E5%A6%82%E4%BD%95%E5%AE%9E%E7%8E%B0%E7%83%AD%E9%87%8D%E5%90%AF/#/schema/breadcrumb/1"},"primaryImageOfPage":{"@id":"/blog/2020-08-28-go%E7%A8%8B%E5%BA%8F%E5%A6%82%E4%BD%95%E5%AE%9E%E7%8E%B0%E7%83%AD%E9%87%8D%E5%90%AF/#/schema/image/2"},"inLanguage":"","potentialAction":[{"@type":"ReadAction","target":["/blog/2020-08-28-go%E7%A8%8B%E5%BA%8F%E5%A6%82%E4%BD%95%E5%AE%9E%E7%8E%B0%E7%83%AD%E9%87%8D%E5%90%AF/"]}]},{"@type":"BreadcrumbList","@id":"/blog/2020-08-28-go%E7%A8%8B%E5%BA%8F%E5%A6%82%E4%BD%95%E5%AE%9E%E7%8E%B0%E7%83%AD%E9%87%8D%E5%90%AF/#/schema/breadcrumb/1","name":"Breadcrumbs","itemListElement":[{"@type":"ListItem","position":1,"item":{"@type":"WebPage","@id":"/","url":"/","name":"Home"}},{"@type":"ListItem","position":2,"item":{"@id":"/blog2020-08-28-go%E7%A8%8B%E5%BA%8F%E5%A6%82%E4%BD%95%E5%AE%9E%E7%8E%B0%E7%83%AD%E9%87%8D%E5%90%AF/"}}]},{"@context":"https://schema.org","@graph":[{"@type":"Article","@id":"/#/schema/article/1","headline":"go程序如何实现热重启","description":"","isPartOf":{"@id":"/blog/2020-08-28-go%E7%A8%8B%E5%BA%8F%E5%A6%82%E4%BD%95%E5%AE%9E%E7%8E%B0%E7%83%AD%E9%87%8D%E5%90%AF/"},"mainEntityOfPage":{"@id":"/blog/2020-08-28-go%E7%A8%8B%E5%BA%8F%E5%A6%82%E4%BD%95%E5%AE%9E%E7%8E%B0%E7%83%AD%E9%87%8D%E5%90%AF/"},"datePublished":"2020-08-28T03:36:59CET","dateModified":"2020-08-28T03:36:59CET","author":{"@id":"/#/schema/person/2"},"publisher":{"@id":"/#/schema/person/1"},"image":{"@id":"/blog/2020-08-28-go%E7%A8%8B%E5%BA%8F%E5%A6%82%E4%BD%95%E5%AE%9E%E7%8E%B0%E7%83%AD%E9%87%8D%E5%90%AF/#/schema/image/2"}}]},{"@context":"https://schema.org","@graph":[{"@type":"Person","@id":"/#/schema/person/2","name":null,"sameAs":[]}]},{"@context":"https://schema.org","@graph":[{"@type":"ImageObject","@id":"/blog/2020-08-28-go%E7%A8%8B%E5%BA%8F%E5%A6%82%E4%BD%95%E5%AE%9E%E7%8E%B0%E7%83%AD%E9%87%8D%E5%90%AF/#/schema/image/2","url":"/doks.png","contentUrl":"/doks.png","caption":"go程序如何实现热重启"}]}]}</script><meta name=theme-color content="#fff"><link rel=icon href=/favicon.ico sizes=any><link rel=icon type=image/svg+xml href=/favicon.svg><link rel=apple-touch-icon sizes=180x180 href=/apple-touch-icon.png><link rel=icon type=image/png sizes=32x32 href=/favicon-32x32.png><link rel=icon type=image/png sizes=16x16 href=/favicon-16x16.png><link rel=manifest crossorigin=use-credentials href=/site.webmanifest><script type=text/javascript src="https://platform-api.sharethis.com/js/sharethis.js#property=607868a58d7101001829a8df&product=sop" async></script><style>[alt~=sharing]{border:0;box-shadow:none}div#st-1{text-align:unset}div#st-1 .st-btn{height:24px;padding:0 4px}div#st-1 .st-btn>img{top:4.2px}div#st-2 .st-btn{height:24px;padding:0 4px}div#st-2 .st-btn>img{top:4.2px}</style></head><body class="blog single"><div class=sticky-top><div class=header-bar></div><header class="navbar navbar-expand-lg navbar-light doks-navbar"><nav class="container-xxl flex-wrap flex-lg-nowrap" aria-label="Main navigation"><a class="navbar-brand order-0" href=/ aria-label=MySpace>MySpace</a>
+<button class="btn btn-menu order-2 d-block d-lg-none" type=button data-bs-toggle=offcanvas data-bs-target=#offcanvasDoks aria-controls=offcanvasDoks aria-label="Open main menu"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentcolor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-menu"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button><div class="offcanvas offcanvas-end border-0 py-lg-1" tabindex=-1 id=offcanvasDoks data-bs-backdrop=true aria-labelledby=offcanvasDoksLabel><div class="header-bar d-lg-none"></div><div class="offcanvas-header d-lg-none"><h2 class="h5 offcanvas-title ps-2" id=offcanvasDoksLabel><a class=text-dark href=/>MySpace</a></h2><button type=button class="btn-close text-reset me-2" data-bs-dismiss=offcanvas aria-label="Close main menu"></button></div><div class="offcanvas-body p-4 p-lg-0"><ul class="nav flex-column flex-lg-row align-items-lg-center mt-2 mt-lg-0 ms-lg-2 me-lg-auto"><li class=nav-item><a class="nav-link ps-0 py-1 active" href=/blog/>Blog</a></li><li class=nav-item><a class="nav-link ps-0 py-1" href=/books/>Books</a></li><li class=nav-item><a class="nav-link ps-0 py-1" href=/journey/introduction>Journey</a></li></ul><hr class="text-black-50 my-4 d-lg-none"><form class="doks-search position-relative flex-grow-1 ms-lg-auto me-lg-2"><input id=search class="form-control is-search" type=search placeholder="Search docs..." aria-label="Search docs..." autocomplete=off><div id=suggestions class="shadow bg-white rounded d-none"></div></form><hr class="text-black-50 my-4 d-lg-none"><ul class="nav flex-column flex-lg-row"><li class=nav-item><a class="nav-link social-link" href=https://twitter.com/hitzhangjie><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentcolor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-twitter"><path d="M23 3a10.9 10.9.0 01-3.14 1.53 4.48 4.48.0 00-7.86 3v1A10.66 10.66.0 013 4s-4 9 5 13a11.64 11.64.0 01-7 2c9 5 20 0 20-11.5a4.5 4.5.0 00-.08-.83A7.72 7.72.0 0023 3z"/></svg><small class="ms-2 d-lg-none">Twitter</small></a></li><li class=nav-item><a class="nav-link social-link" href=https://github.com/hitzhangjie><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentcolor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-github"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37.0 00-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44.0 0020 4.77 5.07 5.07.0 0019.91 1S18.73.65 16 2.48a13.38 13.38.0 00-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07.0 005 4.77 5.44 5.44.0 003.5 8.55c0 5.42 3.3 6.61 6.44 7A3.37 3.37.0 009 18.13V22"/></svg><small class="ms-2 d-lg-none">GitHub</small></a></li></ul></div></div></nav></header></div><div class="wrap container-xxl" role=document><div class=content><div class="row flex-xl-nowrap"><div class="col-lg-5 col-xl-4 docs-sidebar"><nav class=docs-links aria-label="Main navigation"><h3>Tag List</h3><ol><li><a href=/tags/go/>go</a></li><li><a href=/tags/%e7%83%ad%e9%87%8d%e5%90%af/>热重启</a></li><li><a href=/tags/forkexec/>forkexec</a></li><li><a href=/tags/unixsock/>unixsock</a></li></ol></nav></div><nav class="docs-toc d-none d-xl-block col-xl-3" aria-label="Secondary navigation"><div class=page-links><h3>On this page</h3><nav id=TableOfContents><ul><li><ul><li><a href=#1什么是热重启>1.什么是热重启？</a></li><li><a href=#2如何实现热重启>2.如何实现热重启？</a><ul><li><a href=#21认识fork>2.1.认识fork</a></li><li><a href=#22返回值>2.2.返回值</a></li><li><a href=#23fork返回值>2.3.fork返回值</a></li><li><a href=#24局限性>2.4.局限性</a></li></ul></li><li><a href=#3单进程单线程模型>3.单进程单线程模型</a></li><li><a href=#4单进程多线程模型>4.单进程多线程模型</a></li><li><a href=#5-其他线程模型>5. 其他线程模型</a></li><li><a href=#6-go实现热重启触发时机>6. go实现热重启：触发时机</a></li><li><a href=#7-如何判断热重启>7. 如何判断热重启</a></li><li><a href=#8-forkexec>8. ForkExec</a></li><li><a href=#9-go实现热重启-传递listenfd>9. go实现热重启: 传递listenfd</a><ul><li><a href=#91-forkexecprocattrfiles-uintptr>9.1 ForkExec+ProcAttr{Files: []uintptr{}}</a></li><li><a href=#92-unix-domain-socket--cmsg>9.2 unix domain socket + cmsg</a></li></ul></li><li><a href=#10-go实现热重启-子进程如何通过listenfd重建listener>10. go实现热重启: 子进程如何通过listenfd重建listener</a></li><li><a href=#11-go实现热重启父进程平滑退出>11. go实现热重启：父进程平滑退出</a><ul><li><a href=#111-处理已建立连接上请求>11.1. 处理已建立连接上请求</a></li><li><a href=#112-消息服务>11.2. 消息服务</a></li><li><a href=#113-自定义atexit清理任务>11.3. 自定义AtExit清理任务</a></li></ul></li><li><a href=#12-其他>12. 其他</a></li><li><a href=#13-总结>13. 总结</a></li><li><a href=#参考文章>参考文章</a></li></ul></li></ul></nav></div></nav><main class="docs-content col-lg-11 col-xl-9"><h1>go程序如何实现热重启</h1><div style=display:flex><div>分享:&nbsp;&nbsp;</div><div><div class=sharethis-inline-share-buttons></div></div></div><hr><p class=lead></p><p>最近在优化公司框架trpc时发现了一个热重启相关的问题，优化之余也总结沉淀下，对go如何实现热重启这方面的内容做一个简单的梳理。</p><h2 id=1什么是热重启>1.什么是热重启？ <a href=#1%e4%bb%80%e4%b9%88%e6%98%af%e7%83%ad%e9%87%8d%e5%90%af class=anchor aria-hidden=true>#</a><a href=#1什么是热重启 class=anchor aria-hidden=true>#</a></h2><p>热重启（Hot Restart），是一项保证服务可用性的手段。它允许服务重启期间，不中断已经建立的连接，老服务进程不再接受新连接请求，新连接请求将在新服务进程中受理。对于原服务进程中已经建立的连接，也可以将其设为读关闭，等待平滑处理完连接上的请求及连接空闲后再行退出。通过这种方式，可以保证已建立的连接不中断，连接上的事务（请求、处理、响应）可以正常完成，新的服务进程也可以正常接受连接、处理连接上的请求。当然，热重启期间进程平滑退出涉及到的不止是连接上的事务，也有消息服务、自定义事务需要关注。</p><p>这是我理解的热重启的一个大致描述。热重启现在还有没有存在的必要？我的理解是看场景。</p><p>以后台开发为例，假如运维平台有能力在服务升级、重启时自动踢掉流量，服务就绪后又自动加回流量，假如能够合理预估服务QPS、请求处理时长，那么只要配置一个合理的停止前等待时间，是可以达到类似热重启的效果的。这样的话，在后台服务里面支持热重启就显得没什么必要。但是，如果我们开发一个微服务框架，不能对将来的部署平台、环境做这种假设，也有可能使用方只是部署在一两台物理机上，也没有其他的负载均衡设施，但不希望因为重启受干扰，热重启就很有必要。当然还有一些更复杂、要求更苛刻的场景，也需要热重启的能力。</p><p>热重启是比较重要的一项保证服务质量的手段，还是值得了解下的，这也是本文介绍的初衷。</p><h2 id=2如何实现热重启>2.如何实现热重启？ <a href=#2%e5%a6%82%e4%bd%95%e5%ae%9e%e7%8e%b0%e7%83%ad%e9%87%8d%e5%90%af class=anchor aria-hidden=true>#</a><a href=#2如何实现热重启 class=anchor aria-hidden=true>#</a></h2><p>如何实现热重启，这里其实不能一概而论，要结合实际的场景来看（比如服务编程模型、对可用性要求的高低等）。大致的实现思路，可以先抛一下。</p><p>一般要实现热重启，大致要包括如下步骤：</p><ul><li>首先，要让老进程，这里称之为父进程了，先要fork出一个子进程来代替它工作；</li><li>然后，子进程就绪之后，通知父进程，正常接受新连接请求、处理连接上收到的请求；</li><li>再然后，父进程处理完已建立连接上的请求后、连接空闲后，平滑退出。</li></ul><p>听上去是挺简单的&mldr;</p><h3 id=21认识fork>2.1.认识fork <a href=#21%e8%ae%a4%e8%af%86fork class=anchor aria-hidden=true>#</a><a href=#21认识fork class=anchor aria-hidden=true>#</a></h3><p>大家都知道<code>fork()</code> 系统调用，父进程调用fork会创建一个进程副本，代码中还可以通过fork返回值是否为0来区分是子进程还是父进程。</p><pre><code class=language-c>int main(char **argv, int argc) {
+    pid_t pid = fork();
+    if (pid == 0) {
+        printf(&quot;i am child process&quot;);
+    } else {
+        printf(&quot;i am parent process, i have a child process named %d&quot;, pid);
+    }
+}
+</code></pre><p>可能有些开发人员不知道fork的实现原理，或者不知道fork返回值为什么在父子进程中不同，或者不知道如何做到父子进程中返回值不同……了解这些是要有点知识积累的。</p><h3 id=22返回值>2.2.返回值 <a href=#22%e8%bf%94%e5%9b%9e%e5%80%bc class=anchor aria-hidden=true>#</a><a href=#22返回值 class=anchor aria-hidden=true>#</a></h3><p>简单概括下，ABI定义了进行函数调用时的一些规范，如何传递参数，如何返回值等等，以x86为例，如果返回值是rax寄存器能够容的一般都是通过rax寄存器返回的。</p><p>如果rax寄存器位宽无法容纳下的返回值呢？也简单，编译器会安插些指令来完成这些神秘的操作，具体是什么指令，就跟语言编译器实现相关了。</p><ul><li>c语言，可能会将返回值的地址，传递到rdi或其他寄存器，被调函数内部呢，通过多条指令将返回值写入rdi代指的内存区；</li><li>c语言，也可能在被调函数内部，用多个寄存器rax,rdx&mldr;一起暂存返回结果，函数返回时再将多个寄存器的值赋值到变量中；</li><li>也可能会像golang这样，通过栈内存来返回；</li></ul><h3 id=23fork返回值>2.3.fork返回值 <a href=#23fork%e8%bf%94%e5%9b%9e%e5%80%bc class=anchor aria-hidden=true>#</a><a href=#23fork返回值 class=anchor aria-hidden=true>#</a></h3><p>fork系统调用的返回值，有点特殊，在父进程和子进程中，这个函数返回的值是不同的，如何做到的呢？</p><p>联想下父进程调用fork的时候，操作系统内核需要干些什么呢？分配进程控制块、分配pid、分配内存空间……肯定有很多东西啦，这里注意下进程的硬件上下文信息，这些是非常重要的，在进程被调度算法选中进行调度时，是需要还原硬件上下文信息的。</p><p>Linux fork的时候，会对子进程的硬件上下文进行一定的修改，我就是让你fork之后拿到的pid是0，怎么办呢？前面2.2节提过了，对于那些小整数，rax寄存器存下绰绰有余，fork返回时就是将操作系统分配的pid放到rax寄存器的。</p><p>那，对于子进程而言，我只要在fork的时候将它的硬件上下文rax寄存器清0，然后等其他设置全ok后，再将其状态从不可中断等待状态修改为可运行状态，等其被调度器调度时，会先还原其硬件上下文信息，包括PC、rax等等，这样fork返回后，rax中值为0，最终赋值给pid的值就是0。</p><p>因此，也就可以通过这种判断 “pid是否等于0” 的方式来区分当前进程是父进程还是子进程了。</p><h3 id=24局限性>2.4.局限性 <a href=#24%e5%b1%80%e9%99%90%e6%80%a7 class=anchor aria-hidden=true>#</a><a href=#24局限性 class=anchor aria-hidden=true>#</a></h3><p>很多人清楚fork可以创建一个进程的副本并继续往下执行，可以根据fork返回值来执行不同的分支逻辑。如果进程是多线程的，在一个线程中调用fork会复制整个进程吗？</p><p>fork只能创建调用该函数的线程的副本，进程中其他运行的线程，fork不予处理。这就意味着，对于多线程程序而言，寄希望于通过fork来创建一个完整进程副本是不可行的。</p><p>前面我们也提到了，fork是实现热重启的重要一环，fork这里的这个局限性，就制约着不同服务编程模型下的热重启实现方式。所以我们说具体问题具体分析，不同编程模型下实际上可以采用不同的实现方式。</p><h2 id=3单进程单线程模型>3.单进程单线程模型 <a href=#3%e5%8d%95%e8%bf%9b%e7%a8%8b%e5%8d%95%e7%ba%bf%e7%a8%8b%e6%a8%a1%e5%9e%8b class=anchor aria-hidden=true>#</a><a href=#3单进程单线程模型 class=anchor aria-hidden=true>#</a></h2><p>单进程单线程模型，可能很多人一听觉得它已经被淘汰了，生产环境中不能用，真的么？强如redis，不就是单线程。强调下并非单线程模型没用，ok，收回来，现在关注下单进程单线程模型如何实现热重启。</p><p>单进程单线程，实现热重启会比较简单些:</p><ul><li>fork一下就可以创建出子进程，</li><li>子进程可以继承父进程中的资源，如已经打开的文件描述符，包括父进程的listenfd、connfd，</li><li>父进程，可以选择关闭listenfd，后续接受连接的任务就交给子进程来完成了，</li><li>父进程，甚至也可以关闭connfd，让子进程处理连接上的请求、回包等，也可以自身处理完已建立的连接上的请求；</li><li>父进程，在合适的时间点选择退出，子进程开始变成顶梁柱。</li></ul><p>核心思想就是这些，但是具体到实现，就有多种方法：</p><ul><li>可以选择fork的方式让子进程拿到原来的listenfd、connfd，</li><li>也可以选择unixdomain socket的方式父进程将listenfd、connfd发送给子进程。</li></ul><p>有同学可能会想，我不传递这些fd行吗？</p><ul><li>比如我开启了reuseport，父进程直接处理完已建立连接connfd上的请求之后关闭，子进程里reuseport.Listen直接创建新的listenfd。</li></ul><p>也可以！但是有些问题必须要提前考虑到：</p><ul><li>reuseport虽然允许多个进程在同一个端口上多次listen，似乎满足了要求，但是要知道只要euid相同，都可以在这个端口上listen！是不安全的！</li><li>reuseport实现和平台有关系，在Linux平台上在同一个address+port上listen多次，多个listenfd底层可以共享同一个连接队列，内核可以实现负载均衡，但是在darwin平台上却不会！</li></ul><p>当然这里提到的这些问题，在多线程模型下肯定也存在。</p><h2 id=4单进程多线程模型>4.单进程多线程模型 <a href=#4%e5%8d%95%e8%bf%9b%e7%a8%8b%e5%a4%9a%e7%ba%bf%e7%a8%8b%e6%a8%a1%e5%9e%8b class=anchor aria-hidden=true>#</a><a href=#4单进程多线程模型 class=anchor aria-hidden=true>#</a></h2><p>前面提到的问题，在多线程模型中也会出现：</p><ul><li>fork只能复制calling thread，not whole process！</li><li>reuseport多次在相同地址+端口listen得到的多个fd，不同平台有不同的表现，可能无法做到接受连接时的load banlance！</li><li>非reuseport情况下，多次listen会失败！</li><li>不传递fd，直接通过reuseport来重新listen得到listenfd，不安全，不同服务进程实例可能会在同一个端口上监听，gg！</li><li>父进程平滑退出的逻辑，关闭listenfd，等待connfd上请求处理结束，关闭connfd，一切妥当后，父进程退出，子进程挑大梁！</li></ul><h2 id=5-其他线程模型>5. 其他线程模型 <a href=#5-%e5%85%b6%e4%bb%96%e7%ba%bf%e7%a8%8b%e6%a8%a1%e5%9e%8b class=anchor aria-hidden=true>#</a><a href=#5-其他线程模型 class=anchor aria-hidden=true>#</a></h2><p>其他线程都基本上避不开上述3、4的实现或者组合，对应问题相仿，不再赘述。</p><h2 id=6-go实现热重启触发时机>6. go实现热重启：触发时机 <a href=#6-go%e5%ae%9e%e7%8e%b0%e7%83%ad%e9%87%8d%e5%90%af%e8%a7%a6%e5%8f%91%e6%97%b6%e6%9c%ba class=anchor aria-hidden=true>#</a><a href=#6-go实现热重启触发时机 class=anchor aria-hidden=true>#</a></h2><p>需要选择一个时机来触发热重启，什么时候触发呢？操作系统提供了信号机制，允许进程做出一些自定义的信号处理。</p><p>杀死一个进程，一般会通过<code>kill -9</code>发送SIGKILL信号给进程，这个信号不允许捕获，SIGABORT也不允许捕获，这样可以允许进程所有者或者高权限用户控制进程生死，达到更好的管理效果。</p><p>kill也可以用来发送其他信号给进程，如发送SIGUSR1、SIGUSR2、SIGINT等等，进程中可以接收这些信号，并针对性的做出处理。这里可以选择SIGUSR1或者SIGUSR2来通知进程热重启。</p><pre><code class=language-go>go func() {
+    ch := make(chan os.Signal, 1)
+    signal.Notify(ch, os.SIGUSR2)
+    &lt;- ch
+
+    //接下来就可以做热重启相关的逻辑了
+    ...
+}()
+</code></pre><h2 id=7-如何判断热重启>7. 如何判断热重启 <a href=#7-%e5%a6%82%e4%bd%95%e5%88%a4%e6%96%ad%e7%83%ad%e9%87%8d%e5%90%af class=anchor aria-hidden=true>#</a><a href=#7-如何判断热重启 class=anchor aria-hidden=true>#</a></h2><p>那一个go程序重新启动之后，所有运行时状态信息都是新的，那如何区分自己是否是子进程呢，或者说我是否要执行热重启逻辑呢？父进程可以通过设置子进程初始化时的环境变量，比如加个HOT_RESTART=1。</p><p>这就要求代码中在合适的地方要先检测环境变量HOT_RESTART是否为1，如果成立，那就执行热重启逻辑，否则就执行全新的启动逻辑。</p><h2 id=8-forkexec>8. ForkExec <a href=#8-forkexec class=anchor aria-hidden=true>#</a><a href=#8-forkexec class=anchor aria-hidden=true>#</a></h2><p>假如当前进程收到SIGUSR2信号之后，希望执行热重启逻辑，那么好，需要先执行syscall.ForkExec(&mldr;)来创建一个子进程，注意go不同于cc++，它本身就是依赖多线程来调度协程的，天然就是多线程程序，只不过是他没有使用NPTL线程库来创建，而是通过clone系统调用来创建。</p><p>前面提过了，如果单纯fork的话，只能复制调用fork函数的线程，对于进程中的其他线程无能为力，所以对于go这种天然的多线程程序，必须从头来一遍，再exec一下。所以go标准库提供的函数是syscall.ForkExec而不是syscall.Fork。</p><h2 id=9-go实现热重启-传递listenfd>9. go实现热重启: 传递listenfd <a href=#9-go%e5%ae%9e%e7%8e%b0%e7%83%ad%e9%87%8d%e5%90%af-%e4%bc%a0%e9%80%92listenfd class=anchor aria-hidden=true>#</a><a href=#9-go实现热重启-传递listenfd class=anchor aria-hidden=true>#</a></h2><p>go里面传递fd的方式，有这么几种，父进程fork子进程的时候传递fd，或者后面通过unix domain socket传递。需要注意的是，我们传递的实际上是file description，而非file descriptor。</p><p>附上一张类unix系统下file descriptor、file description、inode三者之间的关系图：</p><img alt="linux fs" src=http://km.oa.com/files/photos/pictures/202008/1598592622_18_w2034_h1650.png width=680px><p>fd分配都是从小到大分配的，父进程中的fd为10，传递到子进程中之后有可能就不是10。那么传递到子进程的fd是否是可以预测的呢？可以预测，但是不建议。所以我提供了两种实现方式。</p><h3 id=91-forkexecprocattrfiles-uintptr>9.1 ForkExec+ProcAttr{Files: []uintptr{}} <a href=#91-forkexecprocattrfiles-uintptr class=anchor aria-hidden=true>#</a><a href=#91-forkexecprocattrfiles-uintptr class=anchor aria-hidden=true>#</a></h3><p>要传递一个listenfd很简单，假如是类型net.Listener，那就通过<code>tcpln := ln.(*net.TCPListener); file, _ := tcpln.File(); fd := file.FD()</code> 来拿到listener底层file description对应的fd。</p><p>需要注意的是，这里的fd并非底层的file description对应的初始fd，而是被dup2复制出来的一个fd（调用tcpln.File()的时候就已经分配了），这样底层file description引用计数就会+1。如果后面想通过ln.Close()关闭监听套接字的话，sorry，关不掉。这里需要显示的执行 file.Close() 将新创建的fd关掉，使对应的file description引用计数-1，保证Close的时候引用计数为0，才可以正常关闭。</p><p>试想下，我们想实现热重启，是一定要等连接上接收的请求处理完才可以退出进程的，但是这期间父进程不能再接收新的连接请求，如果这里不能正常关闭listener，那我们这个目标就无法实现。所以这里对dup出来的fd的处理要慎重些，不要遗忘。</p><p>OK，接下来说下syscall.ProcAttr{Files: []uintptr{}}，这里就是要传递的父进程中的fd，比如要传递stdin、stdout、stderr给子进程，就需要将这几个对应的fd塞进去os.Stdin.FD(), os.Stdout.FD(), os.Stderr.FD()，如果要想传递刚才的listenfd，就需要将上面的<code>file.FD()</code>返回的fd塞进去。</p><p>子进程中接收到这些fd之后，在类unix系统下一般会按照从0、1、2、3这样递增的顺序来分配fd，那么传递过去的fd是可以预测的，假如除了stdin, stdout, stderr再传两个listenfd，那么可以预测这两个的fd应该是3，4。在类unix系统下一般都是这么处理的，子进程中就可以根据传递fd的数量（比如通过环境变量传递给子进程FD_NUM=2），来从3开始计算，哦，这两个fd应该是3，4。</p><p>父子进程可以通过一个约定的顺序，来组织传递的listenfd的顺序，以方便子进程中按相同的约定进行处理，当然也可以通过fd重建listener之后来判断对应的监听network+address，以区分该listener对应的是哪一个逻辑service。都是可以的！</p><p>需要注意的是，file.FD()返回的fd是非阻塞的，会影响到底层的file description，在重建listener先将其设为nonblock, syscall.SetNonBlock(fd)，然后<code>file, _ := os.NewFile(fd); tcplistener := net.FileListener(file)</code>，或者是 <code>udpconn := net.PacketConn(file)</code>，然后可以获取tcplistener、udpconn的监听地址，来关联其对应的逻辑service。</p><blockquote><p>前面提到file.FD()会将底层的file description设置为阻塞模式，这里再补充下，net.FileListener(f), net.PacketConn(f)内部会调用newFileFd()->dupSocket()，这几个函数内部会将fd对应的file description重新设置为非阻塞。父子进程中共享了listener对应的file description，所以不需要显示设置为非阻塞。</p></blockquote><p>有些微服务框架是支持对服务进行逻辑service分组的，google pb规范中也支持多service定义，这个在腾讯的goneat、trpc框架中也是有支持的。</p><p>当然了，这里我不会写一个完整的包含上述所有描述的demo给大家，这有点占篇幅，这里只贴一个精简版的实例，其他的读者感兴趣可以自己编码测试。须知纸上得来终觉浅，还是要多实践。</p><pre><code class=language-go>package main
+
+import (
+	&quot;fmt&quot;
+	&quot;io/ioutil&quot;
+	&quot;log&quot;
+	&quot;net&quot;
+	&quot;os&quot;
+	&quot;strconv&quot;
+	&quot;sync&quot;
+	&quot;syscall&quot;
+	&quot;time&quot;
+)
+
+const envRestart = &quot;RESTART&quot;
+const envListenFD = &quot;LISTENFD&quot;
+
+func main() {
+
+	v := os.Getenv(envRestart)
+
+	if v != &quot;1&quot; {
+
+		ln, err := net.Listen(&quot;tcp&quot;, &quot;localhost:8888&quot;)
+		if err != nil {
+			panic(err)
+		}
+
+		wg := sync.WaitGroup{}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for {
+				ln.Accept()
+			}
+		}()
+
+		tcpln := ln.(*net.TCPListener)
+		f, err := tcpln.File()
+		if err != nil {
+			panic(err)
+		}
+
+		os.Setenv(envRestart, &quot;1&quot;)
+		os.Setenv(envListenFD, fmt.Sprintf(&quot;%d&quot;, f.Fd()))
+
+		_, err = syscall.ForkExec(os.Args[0], os.Args, &amp;syscall.ProcAttr{
+			Env:   os.Environ(),
+			Files: []uintptr{os.Stdin.Fd(), os.Stdout.Fd(), os.Stderr.Fd(), f.Fd()},
+			Sys:   nil,
+		})
+		if err != nil {
+			panic(err)
+		}
+		log.Print(&quot;parent pid:&quot;, os.Getpid(), &quot;, pass fd:&quot;, f.Fd())
+		f.Close()
+		wg.Wait()
+
+	} else {
+
+		v := os.Getenv(envListenFD)
+		fd, err := strconv.ParseInt(v, 10, 64)
+		if err != nil {
+			panic(err)
+		}
+		log.Print(&quot;child pid:&quot;, os.Getpid(), &quot;, recv fd:&quot;, fd)
+
+		// case1: 理解上面提及的file descriptor、file description的关系
+		// 这里子进程继承了父进程中传递过来的一些fd，但是fd数值与父进程中可能是不同的
+        //
+        // 取消注释来测试...
+
+		//ff := os.NewFile(uintptr(fd), &quot;&quot;)
+		//if ff != nil {
+		//	_, err := ff.Stat()
+		//	if err != nil {
+		//		log.Println(err)
+		//	}
+		//}
+
+		// case2: 假定父进程中共享了fd 0\1\2\listenfd给子进程，那再子进程中可以预测到listenfd=3
+		ff := os.NewFile(uintptr(3), &quot;&quot;)
+		fmt.Println(&quot;fd:&quot;, ff.Fd())
+		if ff != nil {
+			_, err := ff.Stat()
+			if err != nil {
+				panic(err)
+			}
+
+			// 这里pause, 运行命令lsof -P -p $pid，检查下有没有listenfd传过来，除了0，1，2，应该有看到3
+            // ctrl+d to continue
+			ioutil.ReadAll(os.Stdin)
+
+			fmt.Println(&quot;....&quot;)
+			_, err = net.FileListener(ff)
+			if err != nil {
+				panic(err)
+			}
+
+			// 这里pause, 运行命令lsof -P -p $pid, 会发现有两个listenfd,
+            // 因为前面调用了ff.FD() dup2了一个，如果这里不显示关闭，listener将无法关闭
+			ff.Close()
+
+			time.Sleep(time.Minute)
+		}
+
+		time.Sleep(time.Minute)
+	}
+}
+</code></pre><p>这里用简单的代码大致解释了如何用ProcAttr来传递listenfd。这里有个问题，假如后续父进程中传递的fd修改了呢，比如不传stdin, stdout, stderr的fd了，怎么办？服务端是不是要开始预测应该从0开始编号了？我们可以通过环境变量通知子进程，比如传递的fd从哪个编号开始是listenfd，一共有几个listenfd，这样也是可以实现的。</p><p>这种实现方式可以跨平台。</p><p>感兴趣的话，可以看下facebook提供的这个实现<a href=https://github.com/facebookarchive/grace>grace</a>。</p><h3 id=92-unix-domain-socket--cmsg>9.2 unix domain socket + cmsg <a href=#92-unix-domain-socket--cmsg class=anchor aria-hidden=true>#</a><a href=#92-unix-domain-socket--cmsg class=anchor aria-hidden=true>#</a></h3><p>另一种，思路就是通过unix domain socket + cmsg来传递，父进程启动的时候依然是通过ForkExec来创建子进程，但是并不通过ProcAttr来传递listenfd。</p><p>父进程在创建子进程之前，创建一个unix domain socket并监听，等子进程启动之后，建立到这个unix domain socket的连接，父进程此时开始将listenfd通过cmsg发送给子进程，获取fd的方式与9.1相同，该注意的fd关闭问题也是一样的处理。</p><p>子进程连接上unix domain socket，开始接收cmsg，内核帮子进程收消息的时候，发现里面有一个父进程的fd，内核找到对应的file description，并为子进程分配一个fd，将两者建立起映射关系。然后回到子进程中的时候，子进程拿到的就是对应该file description的fd了。通过os.NewFile(fd)就可以拿到file，然后再通过net.FileListener或者net.PacketConn就可以拿到tcplistener或者udpconn。</p><p>剩下的获取监听地址，关联逻辑service的动作，就与9.1小结描述的一致了。</p><p>这里我也提供一个可运行的精简版的demo，供大家了解、测试用。</p><pre><code class=language-go>package main
+
+import (
+	&quot;fmt&quot;
+	&quot;io/ioutil&quot;
+	&quot;log&quot;
+	&quot;net&quot;
+	&quot;os&quot;
+	&quot;strconv&quot;
+	&quot;sync&quot;
+	&quot;syscall&quot;
+	&quot;time&quot;
+
+	passfd &quot;github.com/ftrvxmtrx/fd&quot;
+)
+
+const envRestart = &quot;RESTART&quot;
+const envListenFD = &quot;LISTENFD&quot;
+const unixsockname = &quot;/tmp/xxxxxxxxxxxxxxxxx.sock&quot;
+
+func main() {
+
+	v := os.Getenv(envRestart)
+
+	if v != &quot;1&quot; {
+
+		ln, err := net.Listen(&quot;tcp&quot;, &quot;localhost:8888&quot;)
+		if err != nil {
+			panic(err)
+		}
+
+		wg := sync.WaitGroup{}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for {
+				ln.Accept()
+			}
+		}()
+
+		tcpln := ln.(*net.TCPListener)
+		f, err := tcpln.File()
+		if err != nil {
+			panic(err)
+		}
+
+		os.Setenv(envRestart, &quot;1&quot;)
+		os.Setenv(envListenFD, fmt.Sprintf(&quot;%d&quot;, f.Fd()))
+
+		_, err = syscall.ForkExec(os.Args[0], os.Args, &amp;syscall.ProcAttr{
+			Env:   os.Environ(),
+			Files: []uintptr{os.Stdin.Fd(), os.Stdout.Fd(), os.Stderr.Fd(), /*f.Fd()*/}, // comment this when test unixsock
+			Sys:   nil,
+		})
+		if err != nil {
+			panic(err)
+		}
+		log.Print(&quot;parent pid:&quot;, os.Getpid(), &quot;, pass fd:&quot;, f.Fd())
+
+		os.Remove(unixsockname)
+		unix, err := net.Listen(&quot;unix&quot;, unixsockname)
+		if err != nil {
+			panic(err)
+		}
+		unixconn, err := unix.Accept()
+		if err != nil {
+			panic(err)
+		}
+		err = passfd.Put(unixconn.(*net.UnixConn), f)
+		if err != nil {
+			panic(err)
+		}
+
+		f.Close()
+		wg.Wait()
+
+	} else {
+
+		v := os.Getenv(envListenFD)
+		fd, err := strconv.ParseInt(v, 10, 64)
+		if err != nil {
+			panic(err)
+		}
+		log.Print(&quot;child pid:&quot;, os.Getpid(), &quot;, recv fd:&quot;, fd)
+
+		// case1: 有些同学觉得可以通过环境变量传fd，通过环境变量肯定是不行的，fd根本不对应子进程中的fd
+		//ff := os.NewFile(uintptr(fd), &quot;&quot;)
+		//if ff != nil {
+		//	_, err := ff.Stat()
+		//	if err != nil {
+		//		log.Println(err)
+		//	}
+		//}
+
+		// case2: 有些同学觉得如果只有一个listenfd的情况下，那如果fork子进程时保证只传0\1\2\listenfd，那子进程中listenfd一定是3
+
+		//ff := os.NewFile(uintptr(3), &quot;&quot;)
+		//if ff != nil {
+		//	_, err := ff.Stat()
+		//	if err != nil {
+		//		panic(err)
+		//	}
+		//
+		//	// pause, ctrl+d to continue
+		//	ioutil.ReadAll(os.Stdin)
+		//	fmt.Println(&quot;....&quot;)
+		//	_, err = net.FileListener(ff) //会dup一个fd出来，有多个listener
+		//	if err != nil {
+		//		panic(err)
+		//	}
+		//	// lsof -P -p $pid, 会发现有两个listenfd
+		//	time.Sleep(time.Minute)
+		//}
+
+		// 这里我们暂停下，方便运行系统命令来查看进程当前的一些状态
+        // run: lsof -P -p $pid，检查下listenfd情况
+
+		ioutil.ReadAll(os.Stdin)
+		fmt.Println(&quot;.....&quot;)
+
+		unixconn, err := net.Dial(&quot;unix&quot;, unixsockname)
+		if err != nil {
+			panic(err)
+		}
+
+		files, err := passfd.Get(unixconn.(*net.UnixConn), 1, nil)
+		if err != nil {
+			panic(err)
+		}
+
+		// 这里再运行命令：lsof -P -p $pid再检查下listenfd情况
+
+		f := files[0]
+		f.Stat()
+
+		time.Sleep(time.Minute)
+	}
+}
+</code></pre><p>这种实现方式，仅限类unix系统。</p><p>如果有服务混布的情况存在，需要考虑下使用的unix domain socket的文件名，避免因为重名所引起的问题，可以考虑通过”进程名.pid“来作为unix domain socket的名字，并通过环境变量将其传递给子进程。</p><h2 id=10-go实现热重启-子进程如何通过listenfd重建listener>10. go实现热重启: 子进程如何通过listenfd重建listener <a href=#10-go%e5%ae%9e%e7%8e%b0%e7%83%ad%e9%87%8d%e5%90%af-%e5%ad%90%e8%bf%9b%e7%a8%8b%e5%a6%82%e4%bd%95%e9%80%9a%e8%bf%87listenfd%e9%87%8d%e5%bb%balistener class=anchor aria-hidden=true>#</a><a href=#10-go实现热重启-子进程如何通过listenfd重建listener class=anchor aria-hidden=true>#</a></h2><p>前面已经提过了，当拿到fd之后还不知道它对应的是tcp的listener，还是udpconn，那怎么办？都试下呗。</p><pre><code class=language-go>file, err := os.NewFile(fd)
+// check error
+
+tcpln, err := net.FileListener(file)
+// check error
+
+udpconn, err := net.PacketConn(file)
+// check error
+</code></pre><h2 id=11-go实现热重启父进程平滑退出>11. go实现热重启：父进程平滑退出 <a href=#11-go%e5%ae%9e%e7%8e%b0%e7%83%ad%e9%87%8d%e5%90%af%e7%88%b6%e8%bf%9b%e7%a8%8b%e5%b9%b3%e6%bb%91%e9%80%80%e5%87%ba class=anchor aria-hidden=true>#</a><a href=#11-go实现热重启父进程平滑退出 class=anchor aria-hidden=true>#</a></h2><p>父进程如何平滑退出呢，这个要看父进程中都有哪些逻辑要平滑停止了。</p><h3 id=111-处理已建立连接上请求>11.1. 处理已建立连接上请求 <a href=#111-%e5%a4%84%e7%90%86%e5%b7%b2%e5%bb%ba%e7%ab%8b%e8%bf%9e%e6%8e%a5%e4%b8%8a%e8%af%b7%e6%b1%82 class=anchor aria-hidden=true>#</a><a href=#111-处理已建立连接上请求 class=anchor aria-hidden=true>#</a></h3><p>可以从这两个方面入手：</p><ul><li>shutdown read，不再接受新的请求，对端继续写数据的时候会感知到失败；</li><li>继续处理连接上已经正常接收的请求，处理完成后，回包，close连接；</li></ul><p>也可以考虑，不进行读端关闭，而是等连接空闲一段时间后再close，是否尽快关闭更符合要求就要结合场景、要求来看。</p><p>如果对可用性要求比较苛刻，可能也会需要考虑将connfd、connfd上已经读取写入的buffer数据也一并传递给子进程处理。</p><h3 id=112-消息服务>11.2. 消息服务 <a href=#112-%e6%b6%88%e6%81%af%e6%9c%8d%e5%8a%a1 class=anchor aria-hidden=true>#</a><a href=#112-消息服务 class=anchor aria-hidden=true>#</a></h3><ul><li>确认下自己服务的消息消费、确认机制是否合理</li><li>不再收新消息</li><li>处理完已收到的消息后，再退出</li></ul><h3 id=113-自定义atexit清理任务>11.3. 自定义AtExit清理任务 <a href=#113-%e8%87%aa%e5%ae%9a%e4%b9%89atexit%e6%b8%85%e7%90%86%e4%bb%bb%e5%8a%a1 class=anchor aria-hidden=true>#</a><a href=#113-自定义atexit清理任务 class=anchor aria-hidden=true>#</a></h3><p>有些任务会有些自定义任务，希望进程在退出之前，能够执行到，这种可以提供一个类似AtExit的注册函数，让进程退出之前能够执行业务自定义的清理逻辑。</p><p>不管是平滑重启，还是其他正常退出，对该支持都是有一定需求的。</p><h2 id=12-其他>12. 其他 <a href=#12-%e5%85%b6%e4%bb%96 class=anchor aria-hidden=true>#</a><a href=#12-其他 class=anchor aria-hidden=true>#</a></h2><p>有些场景下也希望传递connfd，包括connfd上对应的读写的数据。</p><p>比如连接复用的场景，客户端可能会通过同一个连接发送多个请求，假如在中间某个时刻服务端执行热重启操作，服务端如果直接连接读关闭会导致后续客户端的数据发送失败，客户端关闭连接则可能导致之前已经接收的请求也无法正常响应。
+这种情况下，可以考虑服务端继续处理连接上请求，等连接空闲再关闭。会不会一直不空闲呢？有可能。</p><p>其实服务端不能预测客户端是否会采用连接复用模式，选择一个更可靠的处理方式会更好些，如果场景要求比较苛刻，并不希望通过上层重试来解决的话。这种可以考虑将connfd以及connfd上读写的buffer数据一并传递给子进程，交由子进程来处理，这个时候需要关注的点更多，处理起来更复杂，感兴趣的可以参考下mosn的实现。</p><h2 id=13-总结>13. 总结 <a href=#13-%e6%80%bb%e7%bb%93 class=anchor aria-hidden=true>#</a><a href=#13-总结 class=anchor aria-hidden=true>#</a></h2><p>热重启作为一种保证服务平滑重启、升级的实现方式，在今天看来依然非常有价值。本文描述了实现热重启的一些大致思路，并且通过demo循序渐进地描述了在go服务中如何予以实现。虽然没有提供一个完整的热重启实例给大家，但是相信大家读完之后应该已经可以亲手实现了。</p><p>由于作者本人水平有限，难免会有描述疏漏之处，欢迎大家指正。</p><h2 id=参考文章>参考文章 <a href=#%e5%8f%82%e8%80%83%e6%96%87%e7%ab%a0 class=anchor aria-hidden=true>#</a><a href=#参考文章 class=anchor aria-hidden=true>#</a></h2><ol><li>Unix高级编程：进程间通信，W.Richard Stevens</li><li>mosn启动流程，https://mosn.io/blog/code/mosn-startup/</li></ol><div class=edit-page><a href=https://github.com/hitzhangjie/myspace/blob/master/content/blog/2020-08-28-go%e7%a8%8b%e5%ba%8f%e5%a6%82%e4%bd%95%e5%ae%9e%e7%8e%b0%e7%83%ad%e9%87%8d%e5%90%af.md><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentcolor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-edit-2"><path d="M17 3a2.828 2.828.0 114 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>Edit this page on GitHub</a></div><div class="docs-navigation d-flex justify-content-between"><a href=/blog/2020-09-06-%E5%89%96%E6%9E%90go%E4%BA%8C%E8%BF%9B%E5%88%B6%E6%96%87%E4%BB%B6/><div class="card my-1"><div class="card-body py-2">&larr; 剖析go二进制文件</div></div></a><a class=ms-auto href=/blog/2020-08-25-delve%E8%B0%83%E8%AF%95%E5%99%A8%E8%AE%BE%E8%AE%A1%E5%AE%9E%E7%8E%B0/><div class="card my-1"><div class="card-body py-2">delve调试器设计实现 &rarr;</div></div></a></div></main></div></div></div><footer class="footer text-muted"><div class=container-xxl><div class=row><div class="col-lg-8 order-last order-lg-first"><ul class=list-inline><li class=list-inline-item>Powered by <a class=text-muted href=https://www.netlify.com/>Netlify</a>, <a class=text-muted href=https://gohugo.io/>Hugo</a>, and <a class=text-muted href=https://getdoks.org/>Doks</a></li></ul></div><div class="col-lg-8 order-first order-lg-last text-lg-end"><ul class=list-inline></ul></div><div class=col-lg-8 align=right><p><font size=-1>站点构建版本：v</font></p></div></div></div></footer><script src=/js/bootstrap.min.fdbe9b9ba88a036135318f3c721784d684ac9e3280fe282cc80d7d49f7f9c82780cd54228c1608685a230c09984300d7946fc471734d566fcebc148b65bd16db.js integrity="sha512-/b6bm6iKA2E1MY88cheE1oSsnjKA/igsyA19Sff5yCeAzVQijBYIaFojDAmYQwDXlG/EcXNNVm/OvBSLZb0W2w==" crossorigin=anonymous defer></script>
+<script src=/js/highlight.min.451fe6185924dcedf55c767559b5130f666f31c989f0078a75bafc346ad7364e180edfd731b1ca6bae0e90dfee88842885d284126ab0879f5067399e3a02b09e.js integrity="sha512-RR/mGFkk3O31XHZ1WbUTD2ZvMcmJ8AeKdbr8NGrXNk4YDt/XMbHKa64OkN/uiIQohdKEEmqwh59QZzmeOgKwng==" crossorigin=anonymous defer></script>
+<script src=/main.min.f16ffd9b364013a1df84be9cd7a45c470cb48639766bf5551e05bba845fe4ab150cb6436de43609bfed9af47c23bd5e395e9a10b932fa6fb2c4ee8f6cc78d7a3.js integrity="sha512-8W/9mzZAE6HfhL6c16RcRwy0hjl2a/VVHgW7qEX+SrFQy2Q23kNgm/7Zr0fCO9XjlemhC5MvpvssTuj2zHjXow==" crossorigin=anonymous defer></script>
+<script src=/index.min.4f5da6d5d5039814b7640914dc6d7af9b1826b54a2e8027123e345920f33e3dab6f98ed3b275444c8e3ce3de9faa12475d34fad04a0140d0a99b28e75bc5267c.js integrity="sha512-T12m1dUDmBS3ZAkU3G16+bGCa1Si6AJxI+NFkg8z49q2+Y7TsnVETI48496fqhJHXTT60EoBQNCpmyjnW8UmfA==" crossorigin=anonymous defer></script></body></html>

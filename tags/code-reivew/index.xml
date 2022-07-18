@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>code reivew on</title><link>/tags/code-reivew/</link><description>Recent content in code reivew on</description><generator>Hugo -- gohugo.io</generator><language>en-US</language><lastBuildDate>Tue, 10 Sep 2019 17:26:01 +0800</lastBuildDate><atom:link href="/tags/code-reivew/index.xml" rel="self" type="application/rss+xml"/><item><title>Google CR指引, 如何推进代码评审</title><link>/blog/2019-09-10-%E5%A6%82%E4%BD%95%E6%9B%B4%E5%A5%BD%E5%9C%B0%E8%BF%9B%E8%A1%8C%E4%BB%A3%E7%A0%81review/</link><pubDate>Tue, 10 Sep 2019 17:26:01 +0800</pubDate><guid>/blog/2019-09-10-%E5%A6%82%E4%BD%95%E6%9B%B4%E5%A5%BD%E5%9C%B0%E8%BF%9B%E8%A1%8C%E4%BB%A3%E7%A0%81review/</guid><description>最近学习了Google的CodeReview指引，整理了其中一些比较有价值的点，分享给大家。
+Google Code Review Guidelines # Google积累了很多最佳实践，涉及不同的开发语言、项目，这些文档，将Google工程师多年来积攒的一些最佳实践经验进行了总结并分享给众开发者。学习下这里的经验，我们在进行项目开发、开源协同的过程中，相信也可以从中受益。
+Google目前公开的最佳实践相关文档，目前包括：
+Google&amp;rsquo;s Code Review Guidelines，Google代码review指引，包含以下两个系列的内容： The Code Reviewer&amp;rsquo;s Guide The Change Author&amp;rsquo;s Guide 这了涉及到Google内部使用的一些术语，先提下：
+CL: 代表changelist，表示一个提交到VCS的修改，或者等待review的修改，也有组织称之为change或patch；
+LGTM：代表Looks Good to ME，负责代码review的开发者对没有问题的CL进行的评论，表明代码看上去OK；
+The Code Reviewer&amp;rsquo;s Guide # 从代码reviewer的角度出发，介绍下Google内部积累的一些good practices。
+Introduction # Code Review（代码评审）指的是让第三者来阅读作者修改的代码，以发现代码中存在的问题。包括Google在内的很多公司会通能过Code Review的方式来保证代码和产品的质量。
+前文已有提及，CR相关内容主要包括如下两个系列：
+The Code Reviewer&amp;rsquo;s Guide The Change Author&amp;rsquo;s Guide 这里先介绍下CR过程中应该做什么，或者CR的目标是什么。
+What Do Code Reviewers Look For? # Code review应该关注如下方面：</description></item></channel></rss>

@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>protobuf on</title><link>/tags/protobuf/</link><description>Recent content in protobuf on</description><generator>Hugo -- gohugo.io</generator><language>en-US</language><lastBuildDate>Tue, 23 May 2017 16:29:25 +0800</lastBuildDate><atom:link href="/tags/protobuf/index.xml" rel="self" type="application/rss+xml"/><item><title>Protoc及其插件工作原理分析(精华版)</title><link>/blog/2017-05-23-protoc%E5%8F%8A%E6%8F%92%E4%BB%B6%E5%B7%A5%E4%BD%9C%E5%8E%9F%E7%90%86%E5%88%86%E6%9E%90%E7%B2%BE%E5%8D%8E%E7%89%88/</link><pubDate>Tue, 23 May 2017 16:29:25 +0800</pubDate><guid>/blog/2017-05-23-protoc%E5%8F%8A%E6%8F%92%E4%BB%B6%E5%B7%A5%E4%BD%9C%E5%8E%9F%E7%90%86%E5%88%86%E6%9E%90%E7%B2%BE%E5%8D%8E%E7%89%88/</guid><description>在进行protoc插件开发之前，首先要了解protoc的工作原理。protobuf具有诸多优点被广泛使用，由于protoc对proto文件的强大解析能力使我们可以更进一步来开发一些插件，通过插件快速生成特定于proto文件的工具类、配置文件等，从而提高开发效率。
+本文首先会介绍一下protoc的整体工作原理，然后详细介绍一下protoc对proto文件的解析过程，最后给出编写protoc插件来扩展protoc功能的一个示例（这里以protoc-gen-go插件为例）。
+1. protoc工作原理分析 # 1.0. protoc源代码准备 # 要想了解protoc的工作机制，查看其源代码了解其核心流程是最靠谱的方法。
+获取程序源代码的方式如下：
+git co https://github.com/google/protobuf 由于我们工程中常用的protoc版本是v2.5.0，所以这里检出对应版本的tag。
+git ck v2.5.0 考虑到可能会进行测试、修改、注释等学习过程，这里最好创建一个新的分支来操作。
+git branch -b ${new-branch-name} 现在源代码准备好了，下面可以阅读protoc的源码梳理一下其工作原理了。
+上述git检出后的protobuf路径，记为${protobuf}，后面如果出现${protobuf}请知晓其含义。如果在描述源代码时没有提及代码起始路径${protobuf}，那么起始路径均为${protobuf}。
+1.1. protoc执行流程说明 # protoc执行流程的相关源码，主要包括如下两个部分。
+1.1.1. protoc程序入口 # protoc程序入口为以下源文件main函数，该入口函数中完成protoc命令行接口初始化、编程语言及代码生成器注册后，调用cli.Run(argc,argv)解析proto文件并生成特定语言的源代码。
+file: src/google/protobuf/compiler/main.cc
+// Author: kenton@google.com (Kenton Varda) // 这个头文件定义了protoc的命令行接口 #include &amp;lt;google/protobuf/compiler/command_line_interface.h&amp;gt; // protoc中内置了对cpp、python、java语言的支持，对其他语言的支持需要以plugin的方式来支持 #include &amp;lt;google/protobuf/compiler/cpp/cpp_generator.h&amp;gt; #include &amp;lt;google/protobuf/compiler/python/python_generator.h&amp;gt; #include &amp;lt;google/protobuf/compiler/java/java_generator.h&amp;gt; int main(int argc, char* argv[]) { // 初始化protoc命令行接口并开启插件 // - 插件只是普通的可执行程序，其文件名以AllowPlugins参数protoc-开头 // - 假定protoc --foo_out，那么实际调用的插件是protoc-foo google::protobuf::compiler::CommandLineInterface cli; cli.</description></item><item><title>Protoc工作原理分析</title><link>/blog/2017-05-16-protoc%E5%B7%A5%E4%BD%9C%E5%8E%9F%E7%90%86/</link><pubDate>Fri, 19 May 2017 14:29:25 +0800</pubDate><guid>/blog/2017-05-16-protoc%E5%B7%A5%E4%BD%9C%E5%8E%9F%E7%90%86/</guid><description>在进行protoc插件开发之前，首先要了解protoc的工作原理。在protobuf的使用过程中，protoc作为proto文件的编译器，很多开发人员只会用但是不了解其工作原理，更不了解如何扩展其功能。protobuf作为目前常用的数据交换格式在协议开发中被广泛采用，此外，protoc对proto文件的强大解析能力使我们可以开发一些插件，通过插件快速生成特定于proto文件的工具类、配置文件等，从而提高开发效率。
+本文首先会介绍一下protoc的整体工作机制，然后解释一下protoc对proto文件的解析过程，最后给出编写protoc插件扩展protoc功能的一个示例教程。
+1. protoc源代码准备 # 要想了解protoc的工作机制，查看其源代码了解其核心流程是最靠谱的方法。
+获取程序源代码的方式如下：
+git co https://github.com/google/protobuf 由于我们工程中常用的protoc版本是v2.5.0，所以这里检出对应版本的tag。
+git ck v2.5.0 考虑到可能会进行测试、修改、注释等学习过程，这里最好创建一个新的分支来操作。
+git branch ${new-branch-name} git ck ${new-branch-name} 现在源代码准备好了，我比较喜欢使用vim、ctags、cscope来阅读源码，根据个人习惯吧，下面可以阅读protoc的源码梳理以下工作机制。
+2. protoc源码分析 # 上述git检出后的protobuf路径，记为${protobuf}，后面如果出现${protobuf}请知晓其含义。如果在描述源代码时没有提及起始路径${protobuf}，那么起始路径均为${protobuf}。
+2.1. protoc程序入口 # src/google/protobuf/compiler/main.cc中的main函数，为protoc的入口函数。
+file: src/google/protobuf/compiler/main.cc
+// Author: kenton@google.com (Kenton Varda) // 这个头文件定义了protoc的命令行接口 #include &amp;lt;google/protobuf/compiler/command_line_interface.h&amp;gt; // protoc中内置了对cpp、python、java语言的支持，对其他语言的支持需要以plugin的方式来支持 #include &amp;lt;google/protobuf/compiler/cpp/cpp_generator.h&amp;gt; #include &amp;lt;google/protobuf/compiler/python/python_generator.h&amp;gt; #include &amp;lt;google/protobuf/compiler/java/java_generator.h&amp;gt; int main(int argc, char* argv[]) { // 初始化protoc命令行接口并开启插件 // - 插件只是普通的可执行程序，其文件名以AllowPlugins参数protoc-开头 // - 假定protoc --foo_out，那么实际调用的插件是protoc-foo google::protobuf::compiler::CommandLineInterface cli; cli.AllowPlugins(&amp;quot;protoc-&amp;quot;); // Proto2 C++ (指定了--cpp_out将调用cpp::Generator) google::protobuf::compiler::cpp::CppGenerator cpp_generator; cli.</description></item><item><title>Protobuf编解码</title><link>/blog/2017-02-09-protobuf%E7%BC%96%E8%A7%A3%E7%A0%81/</link><pubDate>Thu, 09 Feb 2017 15:11:38 +0800</pubDate><guid>/blog/2017-02-09-protobuf%E7%BC%96%E8%A7%A3%E7%A0%81/</guid><description>img { width: 680px; padding-bottom: 1rem; } 开发过程中学习学习的一点protobuf编解码的知识，以及对遇到的一些编解码相关问题的总结。
+1.pb数据类型 # protobuf对message进行编码时，是将message中的各个成员按照key、value组合成一个字节流，这里的key并不是属性的名字，而是varint(tag&amp;laquo;3 | datatype)，其低3位表示字段类型，类型描述见下图。
+当protobuf对一个字节流进行解码的时候，对于那些它不认识的字段会直接跳过，对字节流反串行化操作的代码主要是依赖于各个Message子类的MergePartialFromCodedStream方法实现，常用的ParseFromString或者ParseFromArray方法最终都是调用该方法来完成反串行化任务。MergePartialFromCodedStream方法中包括了对unknown tag的处理，这部分代码都是protoc自动插入的，所以每个Message子类的对未知tag的处理方式也是一样的，下面通过一个简单的proto文件进行说明。
+文件名：T.proto
+package kn.feeds; enum FeedType { TYPE_RECORD_LIVE = 1; TYPE_RECORD_VIDEO = 2; //TYPE_RECORD_DAYMOMENT = 3; }; message Feed { optional string name = 1; optional int32 time = 2; optional FeedType type = 3; }; 使用protobuf --cpp_out=. T.proto进行处理，生成的T.pb.cc中kn::feeds::Feed::MergePartialFromCodedStream方法的源码如下图所示，其中对不相关代码进行了折叠。switch(....GetFieldNumber(tag))获取到了tag的编号并进行分别处理，如果是一个unknown tag则进入default处理分支，一般情况下是执行DO_(&amp;hellip;)将这个unknown tag保存到一个unknown_fields vector中。
+文件名：T.pb.cc，见下图：
+如果新需求中要求改造旧有的pb协议，例如在message中新追加了一些字段，旧代码在进行反串行化的时候并不会读取到新追加的字段，协议改造对旧有服务是不会产生不良影响的。
+另外，大家一般习惯于使用optional对字段进行修饰，这里就optional字段值是否设置对数据传输的影响也进行一下说明：
+对于message中定义的optional类型的字段field，A给B发消息时，如果A没有显示设置field的值，那么B收到的字节流里面不会包括field字段的信息，B会自动使用proto文件中定义的该字段的默认值。 而当A显示设置字段field的值与默认值相同时，传输给B的字节流里面会包括field字段的信息。设置和不设置optional字段对于串行化数据的编码、传输是不同的。 PS：对于pb2而言，上述描述是正确的。对于pb3的情况，对编码及网络传输数据量又进行了优化，所有的0值都不会在编码时进行编码。如果系统中涉及到pb2、pb3共用，且存在使用pb2的代码中通过判断字段值是否为nil来做特殊逻辑，这里就容易引入问题。而如果全部是pb3协议则不需要考虑这种兼容问题。
+2.varint &amp;amp; zigzag编解码 # 前面列出了protobuf数据类型编码规则，当tag低3位为0时表示varint类型，对于有符号类型、无符号类型其实差别还是挺大的。</description></item></channel></rss>

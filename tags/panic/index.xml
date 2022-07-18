@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>panic on</title><link>/tags/panic/</link><description>Recent content in panic on</description><generator>Hugo -- gohugo.io</generator><language>en-US</language><lastBuildDate>Fri, 16 Apr 2021 13:47:21 +0800</lastBuildDate><atom:link href="/tags/panic/index.xml" rel="self" type="application/rss+xml"/><item><title>如何看待gopanic及异常处理</title><link>/blog/2021-04-16-%E5%A6%82%E4%BD%95%E7%9C%8B%E5%BE%85gopanic%E5%8F%8A%E5%BC%82%E5%B8%B8%E5%A4%84%E7%90%86/</link><pubDate>Fri, 16 Apr 2021 13:47:21 +0800</pubDate><guid>/blog/2021-04-16-%E5%A6%82%E4%BD%95%E7%9C%8B%E5%BE%85gopanic%E5%8F%8A%E5%BC%82%E5%B8%B8%E5%A4%84%E7%90%86/</guid><description>Background # 最近有同学提问，大意是：“go中什么时候用panic、什么时候用error，能不能像其他语言中的try-catch一样用panic-recover来代替层层return err，或者应不应该recover一个panic之后转换为error？”
+这个问题引起了广泛的讨论，在对这几个问题的理解上，我本以为大家应该会认识到位的，没想到很多人认识很模糊。当然，好的地方就是总有有见识的同学站出来指出大家的问题。
+对于那些有灵性的同学，勤实践勤思考的同学，他会自然而然意识到哪种error handling pattern更好，也会有意识地去区分不同pattern的定位和应用场景。这类同学虽然没有什么理论术语支撑，但是他们的“经验”是贴近更好的设计思想、最佳实践的。如果更进一步，能愿意接受一些设计思想的洗礼，则可以将“经验”上升到“模式”，以指导更多人。
+panic != exception # go panic不同于其他语言中的exception，在设计、定位上是有明确的区别的，see: https://dave.cheney.net/2012/01/18/why-go-gets-exceptions-right。
+panics are always fatal to your program. In panicing you never assume that your caller can solve the problem. Hence panic is only used in exceptional circumstances, ones where it is not possible for your code, or anyone integrating your code to continue.
+go panic是用来表示程序出现了十分致命的错误，并且你不能假定这个错误能被解决。所以panic只在很少的场景下才会被用到，并且出现panic时，你的代码解决不了，引用这部分代码的其他代码也解决不了。
+所以，panic并非一般意义上的error，更不能用panic-recover代替层层向上传递error！
+对于，为了自身程序的健壮性，而在启动新的goroutine时，或者调用外部依赖的导出函数、方法时，可能选择recover一些预料之外的panic，并转换为error处理。
+有追求的开发人员，在panic的使用上应该始终遵循go设计理念，同时在程序的健壮性上也会采用些防御性编程的手段。
+panic vs exception # 我们很多开发人员都接触过多门语言，比如Java、C++，等等，这类语言都有异常处理机制，遇到一些意外事件时可以抛出一个异常，异常通常由try-catch block捕获并处理。</description></item></channel></rss>

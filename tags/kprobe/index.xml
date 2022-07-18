@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>kprobe on</title><link>/tags/kprobe/</link><description>Recent content in kprobe on</description><generator>Hugo -- gohugo.io</generator><language>en-US</language><lastBuildDate>Fri, 08 Jul 2022 00:45:45 +0800</lastBuildDate><atom:link href="/tags/kprobe/index.xml" rel="self" type="application/rss+xml"/><item><title>内核探针kprobe工作原理</title><link>/blog/%E5%86%85%E6%A0%B8%E6%8E%A2%E9%92%88/</link><pubDate>Fri, 08 Jul 2022 00:45:45 +0800</pubDate><guid>/blog/%E5%86%85%E6%A0%B8%E6%8E%A2%E9%92%88/</guid><description>内核探针 # 内核中用来方便调试的探针（probe）主要有以下几种：
+kprobe，可以对任意指令地址处安装探针 jprobe，可以对函数入口地址处安装探针，方便获取参数信息 rprobe，或者称为retprobe，顾名思义，主要用来观察retvalue 这几种探针的实现原理大同小异，详细的工作原理可以参考 kprobes.rst。
+kprobe工作原理 # 联想下调试器中断点的工作方式，kprobe可以通过断点的形式来实现：
+记录目标地址addr处的原始一字节指令 将目标地址处的指令替换为0xcc（int3就是软件断点），并注册该地址处对应的kprobe，kprobe应该包含了pre_handler/post_handler int3对应的中断服务处理程序中，有一段代码是要执行对应的kprobe的pre_handler； 将原addr处的一字节指令恢复，然后改成singlestep执行完下条指令； 执行完这个函数中的所有指令，执行完返回后继续执行post_handler 然后直接continue 我说的这个过程不一定精确，但是大致可以这么实现。这种方法可能效率会有点低下，kprobes.rst中也有些优化的思路，我这里没有仔细去看。
+我感兴趣的就是，内核里面的kprobe和调试器中的大致跟踪tracee执行过程，很类似。
+相同点：都是通过指令patch的方式
+不同点：
+kprobe是利用了int3指令触发trap服务程序走到了kprobe的处理逻辑去执行pre_handler/post_handler， 而调试器是tracee执行到断点时区通过trap服务程序走到了通知tracer继续控制tracee这个逻辑。 总结 # 简要总结了下kprobe这种内核探针的工作原理。</description></item></channel></rss>

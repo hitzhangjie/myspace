@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>awgo on</title><link>/tags/awgo/</link><description>Recent content in awgo on</description><generator>Hugo -- gohugo.io</generator><language>en-US</language><lastBuildDate>Fri, 31 Jul 2020 14:53:15 +0800</lastBuildDate><atom:link href="/tags/awgo/index.xml" rel="self" type="application/rss+xml"/><item><title>使用awgo开发alfred.workflow</title><link>/blog/2020-07-31-%E4%BD%BF%E7%94%A8awgo%E5%BC%80%E5%8F%91alfred.workflow/</link><pubDate>Fri, 31 Jul 2020 14:53:15 +0800</pubDate><guid>/blog/2020-07-31-%E4%BD%BF%E7%94%A8awgo%E5%BC%80%E5%8F%91alfred.workflow/</guid><description>img { width: 680px; } 本文简介 # 该workflow主要是为了对 &amp;ldquo;时间戳&amp;rdquo; &amp;amp;&amp;amp; &amp;ldquo;格式化日期+时间字符串&amp;rdquo; 进行快速转换，方便使用。
+开发人员，经常会涉及到时间相关的转换操作，有个趁手的工具还是很有必要的。
+我平时使用alfred比较多，自然就想通过workflow的方式来实现，当然用hammerspoon、pet等其他工具也可以。
+alfred workflow和alfred本身的交互是通过管道方式进行连接的：
+alfred将用户输入的信息转发给匹配的workflow； workflow对接收到的参数进行处理，并将处理的结果按照指定格式输出到stdout； alfred读取stdout中的数据作为响应展示到用户界面； 这里主要使用了awgo来编写workflow，实现逻辑可以参考下代码，逻辑很简单。下面主要介绍下如何使用。
+如何安装？ # 下载项目下 workflow/Date Formats Go.alfredworkflow，双击即可安装。
+如何使用？ # 运行 datex 唤起workflow
+常用转换操作: 获取当前时间对应的Unix时间戳，以及格式化字符串
+datex now，将当前时间转换为时间戳以及格式化后的字符串(多种日期格式)。
+可以用上下键移动进行选择，当按下回车键时，会将对应的结果拷贝到剪贴板，方便粘贴使用。 常用转换操作: 将时间戳转换为对应的格式化字符串
+以时间戳1596137272为例，datex 1596137272，此时会将时间戳转换为格式化后的字符串。
+选择、复制数据操作类似。 常用转换操作: 将格式化字符串转换为时间戳，或其他格式
+以字符串2020-07-30为例，datex 2020-07-30，此时会先将其与候选的格式化字符串进行匹配。
+并转换成一个有效的时间戳。 然后再根据此时间戳，转换为其他格式对应的字符串。选择、复制数据操作类似。 这大致就是该workflow的使用方式。
+关于日期时间格式转换的workflow，github上已经有几个比较好的实现了，轮子不好用就得自己造。
+实现对timezone支持不好; 采用的时间格式不符合国人习惯; 掌握awgo开发alfred workflow以后可以写更多效率工具; 希望这个小工具能帮助到有需要的同学，也给准备开发alfred workflow或使用awgo开发workflow的同学提供一个示例。</description></item></channel></rss>

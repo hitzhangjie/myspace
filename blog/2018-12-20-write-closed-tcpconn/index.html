@@ -1,0 +1,435 @@
+<!doctype html><html lang=en-us><head><meta charset=utf-8><meta http-equiv=x-ua-compatible content="ie=edge"><meta name=viewport content="width=device-width,initial-scale=1,shrink-to-fit=no"><link rel=preload as=font href=/fonts/vendor/jost/jost-v4-latin-regular.woff2 type=font/woff2 crossorigin><link rel=preload as=font href=/fonts/vendor/jost/jost-v4-latin-500.woff2 type=font/woff2 crossorigin><link rel=preload as=font href=/fonts/vendor/jost/jost-v4-latin-700.woff2 type=font/woff2 crossorigin><link rel=stylesheet href=/main.63b6b8ff933309fcc94a30e21d69932290c8643fa1a32893f5681778c776ed3e51c237a1acd00b42426b3bf780c351b4a6ce75b3b659915ef0dd610b2e027a8c.css integrity="sha512-Y7a4/5MzCfzJSjDiHWmTIpDIZD+hoyiT9WgXeMd27T5RwjehrNALQkJrO/eAw1G0ps51s7ZZkV7w3WELLgJ6jA==" crossorigin=anonymous><noscript><style>img.lazyload{display:none}</style></noscript><meta name=robots content="index, follow"><meta name=googlebot content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1"><meta name=bingbot content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1"><title>write closed tcpconn - MySpace</title><meta name=description content="问题背景 # tcp client: write to a half-closed tcp connection!
+这里探讨一下这个问题，Write to a closed tcp connection的问题。在深入讨论这些问题之前，首先要了解tcp state diagram，为此文末特地附上了经典的tcp状态转换图。
+我们的场景是这样的，tcp server已经启动，然后tcp client主动建立连接请求，连接成功建立后，tcp client并不立即发送数据而是等待一段时间之后才会发送数据（这种在client端的tcp连接池中非常常见），tcp server端为了防止连接被滥用，会每隔30s钟检查一下tcp连接是否空闲，如果两次检查都发现tcp连接空闲则主动将连接关闭。
+原因分析 # 此时tcp server端会调用conn.Close()方法，该方法最终会导致传输层发送tcp FIN包给对端，tcp client这边的机器收到FIN包后会回一个ACK，然后呢？tcp client不会继续发FIN包给tcp server吗？不会！仅此而已。问题就是这么诞生的，什么问题呢，tcp client仍然可以发包，但是n, err := tcpconn.Write(...)这个时候并不会检测到err != nil，只有等到n, err := tcpconn.Read(...)的时候才会发现err为io.EOF，这个时候才能判断得知tcp server已经把连接销毁了。
+从RPC框架角度而言，希望为client维护的tcp连接池是高效可用的，所以想对上述情况下的客户端连接进行检测，避免连接池中存在上述被tcp server关闭的连接。
+再简单总结下tcp server、tcp client两端的不同处理逻辑：
+  从tcp server的视角来看，
+tcp server调用的conn.Close()，对应的是系统调用close，tcp server端认为它已经彻底关闭这个连接了！
+  从tcp client的视角来看，
+这个连接是我主动建立的，我还没有给你发送FIN包发起关闭序列呢，因此这个连接仍然是可以使用的。tcp client认为tcp server只是关闭了写端，没有关闭读端，因此tcp client仍然是可写的，并且socket被设置成了nonblocking，conn.Write()仍然是成功返回的，返回的err == nil。但是当真正传输层执行数据发送的时候，tcp server端认为这个连接已销毁，因此会返回RST！这个时候上层go代码因为已经返回已经感知不到写的时候存在错误，这个RST会将tcp client端的socket标记为已关闭。下次tcpconn.Read的时候就能感知到io.EOF错误了，如果再发起一次tcpconn.Write也可以立即返回错误。
+  关于close与shutdown # 假如tcp server调用的不是conn."><link rel=canonical href=/blog/2018-12-20-write-closed-tcpconn/><meta property="og:locale" content="en_US"><meta property="og:type" content="article"><meta property="og:title" content="write closed tcpconn"><meta property="og:description" content="问题背景 # tcp client: write to a half-closed tcp connection!
+这里探讨一下这个问题，Write to a closed tcp connection的问题。在深入讨论这些问题之前，首先要了解tcp state diagram，为此文末特地附上了经典的tcp状态转换图。
+我们的场景是这样的，tcp server已经启动，然后tcp client主动建立连接请求，连接成功建立后，tcp client并不立即发送数据而是等待一段时间之后才会发送数据（这种在client端的tcp连接池中非常常见），tcp server端为了防止连接被滥用，会每隔30s钟检查一下tcp连接是否空闲，如果两次检查都发现tcp连接空闲则主动将连接关闭。
+原因分析 # 此时tcp server端会调用conn.Close()方法，该方法最终会导致传输层发送tcp FIN包给对端，tcp client这边的机器收到FIN包后会回一个ACK，然后呢？tcp client不会继续发FIN包给tcp server吗？不会！仅此而已。问题就是这么诞生的，什么问题呢，tcp client仍然可以发包，但是n, err := tcpconn.Write(...)这个时候并不会检测到err != nil，只有等到n, err := tcpconn.Read(...)的时候才会发现err为io.EOF，这个时候才能判断得知tcp server已经把连接销毁了。
+从RPC框架角度而言，希望为client维护的tcp连接池是高效可用的，所以想对上述情况下的客户端连接进行检测，避免连接池中存在上述被tcp server关闭的连接。
+再简单总结下tcp server、tcp client两端的不同处理逻辑：
+  从tcp server的视角来看，
+tcp server调用的conn.Close()，对应的是系统调用close，tcp server端认为它已经彻底关闭这个连接了！
+  从tcp client的视角来看，
+这个连接是我主动建立的，我还没有给你发送FIN包发起关闭序列呢，因此这个连接仍然是可以使用的。tcp client认为tcp server只是关闭了写端，没有关闭读端，因此tcp client仍然是可写的，并且socket被设置成了nonblocking，conn.Write()仍然是成功返回的，返回的err == nil。但是当真正传输层执行数据发送的时候，tcp server端认为这个连接已销毁，因此会返回RST！这个时候上层go代码因为已经返回已经感知不到写的时候存在错误，这个RST会将tcp client端的socket标记为已关闭。下次tcpconn.Read的时候就能感知到io.EOF错误了，如果再发起一次tcpconn.Write也可以立即返回错误。
+  关于close与shutdown # 假如tcp server调用的不是conn."><meta property="og:url" content="/blog/2018-12-20-write-closed-tcpconn/"><meta property="og:site_name" content="MySpace"><meta property="article:published_time" content="2018-12-20T23:11:29+08:00"><meta property="article:modified_time" content="2018-12-20T23:11:29+08:00"><meta property="og:image" content="/doks.png"><meta property="og:image:alt" content="MySpace"><meta name=twitter:card content="summary_large_image"><meta name=twitter:site content="@hitzhangjie"><meta name=twitter:creator content="@hitzhangjie"><meta name=twitter:title content="write closed tcpconn"><meta name=twitter:description content><meta name=twitter:image content="/doks.png"><meta name=twitter:image:alt content="write closed tcpconn"><script type=application/ld+json>{"@context":"https://schema.org","@graph":[{"@type":"Person","@id":"/#/schema/person/1","name":"","url":"/","sameAs":["https://twitter.com/hitzhangjie","https://www.linkedin.com/in/hitzhangjie/","https://github.com/hitzhangjie"],"image":{"@type":"ImageObject","@id":"/#/schema/image/1","url":"/\u003cnil\u003e","width":null,"height":null,"caption":""}},{"@type":"WebSite","@id":"/#/schema/website/1","url":"/","name":"MySpace","description":"MySpace is a hitzhangjie\u0027s personal space, for blogs, books, journey, thinkings.","publisher":{"@id":"/#/schema/person/1"}},{"@type":"WebPage","@id":"/blog/2018-12-20-write-closed-tcpconn/","url":"/blog/2018-12-20-write-closed-tcpconn/","name":"write closed tcpconn","description":"","isPartOf":{"@id":"/#/schema/website/1"},"about":{"@id":"/#/schema/person/1"},"datePublished":"2018-12-20T23:11:29CET","dateModified":"2018-12-20T23:11:29CET","breadcrumb":{"@id":"/blog/2018-12-20-write-closed-tcpconn/#/schema/breadcrumb/1"},"primaryImageOfPage":{"@id":"/blog/2018-12-20-write-closed-tcpconn/#/schema/image/2"},"inLanguage":"","potentialAction":[{"@type":"ReadAction","target":["/blog/2018-12-20-write-closed-tcpconn/"]}]},{"@type":"BreadcrumbList","@id":"/blog/2018-12-20-write-closed-tcpconn/#/schema/breadcrumb/1","name":"Breadcrumbs","itemListElement":[{"@type":"ListItem","position":1,"item":{"@type":"WebPage","@id":"/","url":"/","name":"Home"}},{"@type":"ListItem","position":2,"item":{"@id":"/blog2018-12-20-write-closed-tcpconn/"}}]},{"@context":"https://schema.org","@graph":[{"@type":"Article","@id":"/#/schema/article/1","headline":"write closed tcpconn","description":"","isPartOf":{"@id":"/blog/2018-12-20-write-closed-tcpconn/"},"mainEntityOfPage":{"@id":"/blog/2018-12-20-write-closed-tcpconn/"},"datePublished":"2018-12-20T23:11:29CET","dateModified":"2018-12-20T23:11:29CET","author":{"@id":"/#/schema/person/2"},"publisher":{"@id":"/#/schema/person/1"},"image":{"@id":"/blog/2018-12-20-write-closed-tcpconn/#/schema/image/2"}}]},{"@context":"https://schema.org","@graph":[{"@type":"Person","@id":"/#/schema/person/2","name":null,"sameAs":[]}]},{"@context":"https://schema.org","@graph":[{"@type":"ImageObject","@id":"/blog/2018-12-20-write-closed-tcpconn/#/schema/image/2","url":"/doks.png","contentUrl":"/doks.png","caption":"write closed tcpconn"}]}]}</script><meta name=theme-color content="#fff"><link rel=icon href=/favicon.ico sizes=any><link rel=icon type=image/svg+xml href=/favicon.svg><link rel=apple-touch-icon sizes=180x180 href=/apple-touch-icon.png><link rel=icon type=image/png sizes=32x32 href=/favicon-32x32.png><link rel=icon type=image/png sizes=16x16 href=/favicon-16x16.png><link rel=manifest crossorigin=use-credentials href=/site.webmanifest><script type=text/javascript src="https://platform-api.sharethis.com/js/sharethis.js#property=607868a58d7101001829a8df&product=sop" async></script><style>[alt~=sharing]{border:0;box-shadow:none}div#st-1{text-align:unset}div#st-1 .st-btn{height:24px;padding:0 4px}div#st-1 .st-btn>img{top:4.2px}div#st-2 .st-btn{height:24px;padding:0 4px}div#st-2 .st-btn>img{top:4.2px}</style></head><body class="blog single"><div class=sticky-top><div class=header-bar></div><header class="navbar navbar-expand-lg navbar-light doks-navbar"><nav class="container-xxl flex-wrap flex-lg-nowrap" aria-label="Main navigation"><a class="navbar-brand order-0" href=/ aria-label=MySpace>MySpace</a>
+<button class="btn btn-menu order-2 d-block d-lg-none" type=button data-bs-toggle=offcanvas data-bs-target=#offcanvasDoks aria-controls=offcanvasDoks aria-label="Open main menu"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentcolor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-menu"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button><div class="offcanvas offcanvas-end border-0 py-lg-1" tabindex=-1 id=offcanvasDoks data-bs-backdrop=true aria-labelledby=offcanvasDoksLabel><div class="header-bar d-lg-none"></div><div class="offcanvas-header d-lg-none"><h2 class="h5 offcanvas-title ps-2" id=offcanvasDoksLabel><a class=text-dark href=/>MySpace</a></h2><button type=button class="btn-close text-reset me-2" data-bs-dismiss=offcanvas aria-label="Close main menu"></button></div><div class="offcanvas-body p-4 p-lg-0"><ul class="nav flex-column flex-lg-row align-items-lg-center mt-2 mt-lg-0 ms-lg-2 me-lg-auto"><li class=nav-item><a class="nav-link ps-0 py-1 active" href=/blog/>Blog</a></li><li class=nav-item><a class="nav-link ps-0 py-1" href=/books/>Books</a></li><li class=nav-item><a class="nav-link ps-0 py-1" href=/journey/introduction>Journey</a></li></ul><hr class="text-black-50 my-4 d-lg-none"><form class="doks-search position-relative flex-grow-1 ms-lg-auto me-lg-2"><input id=search class="form-control is-search" type=search placeholder="Search docs..." aria-label="Search docs..." autocomplete=off><div id=suggestions class="shadow bg-white rounded d-none"></div></form><hr class="text-black-50 my-4 d-lg-none"><ul class="nav flex-column flex-lg-row"><li class=nav-item><a class="nav-link social-link" href=https://twitter.com/hitzhangjie><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentcolor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-twitter"><path d="M23 3a10.9 10.9.0 01-3.14 1.53 4.48 4.48.0 00-7.86 3v1A10.66 10.66.0 013 4s-4 9 5 13a11.64 11.64.0 01-7 2c9 5 20 0 20-11.5a4.5 4.5.0 00-.08-.83A7.72 7.72.0 0023 3z"/></svg><small class="ms-2 d-lg-none">Twitter</small></a></li><li class=nav-item><a class="nav-link social-link" href=https://github.com/hitzhangjie><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentcolor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-github"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37.0 00-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44.0 0020 4.77 5.07 5.07.0 0019.91 1S18.73.65 16 2.48a13.38 13.38.0 00-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07.0 005 4.77 5.44 5.44.0 003.5 8.55c0 5.42 3.3 6.61 6.44 7A3.37 3.37.0 009 18.13V22"/></svg><small class="ms-2 d-lg-none">GitHub</small></a></li></ul></div></div></nav></header></div><div class="wrap container-xxl" role=document><div class=content><div class="row flex-xl-nowrap"><div class="col-lg-5 col-xl-4 docs-sidebar"><nav class=docs-links aria-label="Main navigation"><h3>Tag List</h3><ol><li><a href=/tags/tcp/>tcp</a></li><li><a href=/tags/half%20closed/>half closed</a></li><li><a href=/tags/eof/>eof</a></li><li><a href=/tags/fin/>fin</a></li></ol></nav></div><nav class="docs-toc d-none d-xl-block col-xl-3" aria-label="Secondary navigation"><div class=page-links><h3>On this page</h3><nav id=TableOfContents><ul><li><a href=#问题背景>问题背景</a></li><li><a href=#原因分析>原因分析</a></li><li><a href=#关于close与shutdown>关于close与shutdown</a></li><li><a href=#rpc框架关心这个问题>RPC框架关心这个问题</a></li><li><a href=#go网络库为什么这么设计>go网络库为什么这么设计</a></li><li><a href=#如何更好地解决问题>如何更好地解决问题</a><ul><li><a href=#连接池连接活性检测优化>连接池连接活性检测优化</a></li></ul></li><li><a href=#在rpc级别支持重试对冲>在RPC级别支持重试对冲</a></li><li><a href=#附录>附录</a></li></ul></nav></div></nav><main class="docs-content col-lg-11 col-xl-9"><h1>write closed tcpconn</h1><div style=display:flex><div>分享:&nbsp;&nbsp;</div><div><div class=sharethis-inline-share-buttons></div></div></div><hr><p class=lead></p><h1 id=问题背景>问题背景 <a href=#%e9%97%ae%e9%a2%98%e8%83%8c%e6%99%af class=anchor aria-hidden=true>#</a></h1><p><strong>tcp client: write to a half-closed tcp connection!</strong></p><p>这里探讨一下这个问题，Write to a closed tcp connection的问题。在深入讨论这些问题之前，首先要了解tcp state diagram，为此文末特地附上了经典的tcp状态转换图。</p><p>我们的场景是这样的，tcp server已经启动，然后tcp client主动建立连接请求，连接成功建立后，tcp client并不立即发送数据而是等待一段时间之后才会发送数据（这种在client端的tcp连接池中非常常见），tcp server端为了防止连接被滥用，会每隔30s钟检查一下tcp连接是否空闲，如果两次检查都发现tcp连接空闲则主动将连接关闭。</p><h1 id=原因分析>原因分析 <a href=#%e5%8e%9f%e5%9b%a0%e5%88%86%e6%9e%90 class=anchor aria-hidden=true>#</a></h1><p>此时tcp server端会调用<code>conn.Close()</code>方法，该方法最终会导致传输层发送tcp FIN包给对端，tcp client这边的机器收到FIN包后会回一个ACK，然后呢？tcp client不会继续发FIN包给tcp server吗？不会！仅此而已。问题就是这么诞生的，什么问题呢，tcp client仍然可以发包，但是<code>n, err := tcpconn.Write(...)</code>这个时候并不会检测到<code>err != nil</code>，只有等到<code>n, err := tcpconn.Read(...)</code>的时候才会发现err为io.EOF，这个时候才能判断得知tcp server已经把连接销毁了。</p><p>从RPC框架角度而言，希望为client维护的tcp连接池是高效可用的，所以想对上述情况下的客户端连接进行检测，避免连接池中存在上述被tcp server关闭的连接。</p><p>再简单总结下tcp server、tcp client两端的不同处理逻辑：</p><ul><li><p>从tcp server的视角来看，</p><p>tcp server调用的conn.Close()，对应的是系统调用close，tcp server端认为它已经彻底关闭这个连接了！</p></li><li><p>从tcp client的视角来看，</p><p>这个连接是我主动建立的，我还没有给你发送FIN包发起关闭序列呢，因此这个连接仍然是可以使用的。tcp client认为tcp server只是关闭了写端，没有关闭读端，因此tcp client仍然是可写的，并且socket被设置成了nonblocking，conn.Write()仍然是成功返回的，返回的err == nil。但是当真正传输层执行数据发送的时候，tcp server端认为这个连接已销毁，因此会返回RST！这个时候上层go代码因为已经返回已经感知不到写的时候存在错误，这个RST会将tcp client端的socket标记为已关闭。下次tcpconn.Read的时候就能感知到io.EOF错误了，如果再发起一次tcpconn.Write也可以立即返回错误。</p></li></ul><h1 id=关于close与shutdown>关于close与shutdown <a href=#%e5%85%b3%e4%ba%8eclose%e4%b8%8eshutdown class=anchor aria-hidden=true>#</a></h1><p>假如tcp server调用的不是conn.Close()，而是conn.CloseWrite()，这个对应的系统调用shutdown(SHUT_WR)，那只表示写端关闭，这个时候tcp client发送数据过去，tcp server端返回的就不是RST了，而是正常的ACK，因为tcp server端也认为这个连接只是关闭了写端。</p><p>本质上来说，内核在处理系统调用close、shutdown的时候对套接字的处理是有差异的，close的时候对fd引用计数减1，如果引用计数为0了，那么就直接销毁套接字，认为对应的连接不再有效了（所以收到tcp client发来的数据会回RST）。但是shutdown(SHUT_WR)的时候，不会减引用计数，内核并不会直接销毁套接字，虽然也会发FIN包，但也只是认为这个连接是写端关闭、读端正常，所以还可以正常接收数据！</p><h1 id=rpc框架关心这个问题>RPC框架关心这个问题 <a href=#rpc%e6%a1%86%e6%9e%b6%e5%85%b3%e5%bf%83%e8%bf%99%e4%b8%aa%e9%97%ae%e9%a2%98 class=anchor aria-hidden=true>#</a></h1><p>问题出现：</p><p>对于上层应用程序来说，conn.Write()返回nil就认为是返回成功了，但是实际包并没有发送出去，所以后续等待接收响应的时候conn.Read()就会返回io.EOF错误显示对端连接已关闭。</p><p>假如满足下面几个条件，那么tcp client请求tcp server失败的概率就会很大了！</p><ul><li>tcp client请求tcp server是通过连接池来实现的；</li><li>tcp client请求tcp server并不频繁的情况下；</li><li>tcp server又存在主动销毁空闲连接的时候；</li></ul><p>如何避免这里的问题呢？在go里面tcp client中的连接池实现，可以定期地检查tcp连接是否有效，实现方法就是conn.Read()一下，如果返回的是io.EOF错误则表示连接已关闭，执行conn.Close()并重新获取连接即可。conn.Write()是不会返回这个io.EOF错误的，会想上面的场景来看，tcp client端现在还认为tcp连接是有效的呢，所以conn.Write()是肯定不会返回io.EOF错误的。</p><h1 id=go网络库为什么这么设计>go网络库为什么这么设计 <a href=#go%e7%bd%91%e7%bb%9c%e5%ba%93%e4%b8%ba%e4%bb%80%e4%b9%88%e8%bf%99%e4%b9%88%e8%ae%be%e8%ae%a1 class=anchor aria-hidden=true>#</a></h1><p>这里再延伸一下，为什么go里面conn.Write()的时候不去检查一下连接是否已关闭呢？比如显示地conn.Read()一下？这要考虑tcp的设计宗旨了，tcp本身就是支持全双工模式的，tcp连接的任意一端都有权利关闭读端或者写端，所以从go api设计者的角度来看，conn.Write()就只是单纯地认为我这段tcpconn的写端未关闭即可！对端是否写关闭根本无需考虑，而从更通用的角度来考虑，有些服务端逻辑上可以只收请求不回响应。为了通用性，conn.Write()不可能去检查对端是否写关闭！</p><p>那从一个网络框架设计或者一个应用程序开发者角度来说呢？我们关心一个请求是否能拿到对应的响应！如果我们要避免这个问题，以c、c++为例，我们完全可以借助epoll_wait来轮询是否有EPOLLRDHUP事件就绪，有就认为连接关闭销毁就可以了，或者轮询EPOLLIN事件就绪接着read(fd, buf, 0)返回0==EOF就可以了。但是每次write之前都这样检查一下，还是很蛋疼的，要陷入多次系统调用，而且即便在epoll_wait返回之后、write之前这段时间内，仍然对端可能会发一个FIN包过来！所以说这样也并不能一劳永逸地解决问题！</p><h1 id=如何更好地解决问题>如何更好地解决问题 <a href=#%e5%a6%82%e4%bd%95%e6%9b%b4%e5%a5%bd%e5%9c%b0%e8%a7%a3%e5%86%b3%e9%97%ae%e9%a2%98 class=anchor aria-hidden=true>#</a></h1><p><strong>再回到问题的起点，其实我们不想关心这些网络细节，我们只想关心，我发送出去的请求是否得到了可靠的响应！</strong></p><p>失败重试！失败后重试一次、两次已经成为了大家写代码时候的常态，但是一个网络框架，是否应该减少这种负担？可能上面我们讨论的情形在线上环境中并不多见，但它确实是一个已知的问题！如果请求量比较大，连接不会因为空闲被关掉，那么这个问题出现的概率很少，但是假如请求量确实不大，这个问题就会凸显出来了。</p><h2 id=连接池连接活性检测优化>连接池连接活性检测优化 <a href=#%e8%bf%9e%e6%8e%a5%e6%b1%a0%e8%bf%9e%e6%8e%a5%e6%b4%bb%e6%80%a7%e6%a3%80%e6%b5%8b%e4%bc%98%e5%8c%96 class=anchor aria-hidden=true>#</a><a href=#连接池连接活性检测优化 class=anchor aria-hidden=true>#</a></h2><p>为此我们想了一种改良的方法来检测是否出现了对端关闭连接的情况，思路是这样的，因为不方便再去poll类似的EPOLLIN、EPOLLRDHUP事件，这里再从连接池获取空闲连接时，借助系统调用<code>n, err := syscall.Read(fd, buf)</code>直接去非阻塞读一下，如果返回err == nil 并且 n==0，那么就可以判定对端连接写关闭（refer to poll/fd_unix.go:145~180, fd.eofError(n, err)）。</p><pre><code class=language-go>func (nci *NConnItem) readClosed(conn net.Conn) bool {
+
+	var (
+		readClosed bool
+		rawConn    syscall.RawConn
+		err        error
+	)
+
+	f := func(fd uintptr) bool {
+		one := []byte{0}
+		n, e := syscall.Read(int(fd), one)
+
+		if e != nil &amp;&amp; e != syscall.EAGAIN {
+			// connection broken, close it
+			readClosed = true
+		}
+		if e == nil &amp;&amp; n == 0 {
+			// peer half-close connection, refer to poll/fd_unix.go:145~180, fd.eofError(n, err)
+			readClosed = true
+		}
+		// only detect whether peer half-close connection, don't block to wait read-ready.
+		return true
+	}
+
+	switch conn.(type) {
+	case *net.TCPConn:
+		tcpconn, _ := conn.(*net.TCPConn)
+		rawConn, err = tcpconn.SyscallConn()
+	case *net.UnixConn:
+		unixconn, _ := conn.(*net.UnixConn)
+		rawConn, err = unixconn.SyscallConn()
+	default:
+		return false
+	}
+
+	err = rawConn.Read(f)
+	if err != nil {
+		return true
+	}
+
+	if readClosed {
+		return true
+	}
+
+	return false
+}
+</code></pre><p>如果我们利用tcp全双工能力，实现client、server的全双工通信模式，一边发送多个请求、一边接收多个响应，假如接收响应的时候发现io.EOF，那么后续的发送直接返回失败就行了。但是假如网络抖动的情况下，这种全双工通信模式容易出现失败激增的毛刺。</p><p>这种情境下，貌似UDP会是更好的选择，当然也要考虑服务端是否支持UDP。</p><h1 id=在rpc级别支持重试对冲>在RPC级别支持重试对冲 <a href=#%e5%9c%a8rpc%e7%ba%a7%e5%88%ab%e6%94%af%e6%8c%81%e9%87%8d%e8%af%95%e5%af%b9%e5%86%b2 class=anchor aria-hidden=true>#</a></h1><p>还有一种更优雅的做法，在RPC框架设计上支持interceptor扩展，包括前置interceptor、后置interceptor，比如grpc框架的interceptor是以递归的形式形成了一个链条，前面interceptor的完成驱动后一个执行，最后的interceptor驱动真正的RPC方法执行。</p><p>我们可以在interceptor层面上支持重试对冲，比如本文提及的失败重试，我们可以不用过度优化tcp连接池连接活性检测，而是将关注重点放在如何更好地解决失败后的重试上：</p><ul><li>立即重试</li><li>重试次数</li><li>指数退避</li><li>etc</li></ul><p>RPC方法中，在tcpconn.Write发送请求成功后，继续通过tcpconn.Read读取响应，此时读取到io.EOF则返回错误，此时驱动该RPC方法执行的重试interceptor会根据配置的重试策略进行重试，从而更优雅地解决这里write closed tcpconn的问题。</p><h1 id=附录>附录 <a href=#%e9%99%84%e5%bd%95 class=anchor aria-hidden=true>#</a></h1><p><strong>1 测试tcp server <code>close</code>空闲连接</strong></p><p>mac下测试方法：</p><ul><li>服务端：nc -kl 5555 -w 2</li><li>客户端：go run client.go，client.go代码如附录3。</li></ul><p>linux下测试方法：</p><ul><li>服务端：nc -kl 5555 -i 2（与mac下参数不同，效果相同，都是2s后close连接）</li><li>客户端：go run client.go，client.go代码如附录3。</li></ul><p><strong>2 测试tcp server <code>shutdown(SHUT_WR)</code>空闲连接</strong></p><p>服务端：go run server.go</p><p><strong>3 测试代码server.go+client.go</strong></p><p>file server.go</p><pre><code class=language-go>package main
+
+import (
+	&quot;fmt&quot;
+	&quot;net&quot;
+	&quot;os&quot;
+	&quot;time&quot;
+)
+
+func init() {
+	log.SetFlags(log.LstdFlags | log.Lshortfile)
+}
+
+func main() {
+	listener, err := net.Listen(&quot;tcp4&quot;, &quot;:5555&quot;)
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+
+	for {
+		conn, err := listener.Accept()
+		if err != nil {
+			fmt.Println(err)
+			continue
+		}
+
+		go func() {
+
+			go func() {
+				time.Sleep(time.Second * time.Duration(2))
+				tcpconn, ok := conn.(*net.TCPConn)
+				if !ok {
+					fmt.Println(err)
+					return
+				}
+				tcpconn.CloseWrite()
+			}()
+
+			time.Sleep(time.Second * time.Duration(4))
+
+			buf := make([]byte, 1024)
+			n, err := conn.Read(buf)
+			if err != nil {
+				fmt.Println(err)
+				return
+			}
+
+			fmt.Println(&quot;read bytes size:%v, data:%s&quot;, n, string(buf))
+		}()
+	}
+
+}
+</code></pre><p>file: client.go</p><pre><code class=language-go>package main
+
+import (
+	&quot;os&quot;
+	&quot;net&quot;
+	&quot;time&quot;
+)
+
+func main() {
+	strEcho := &quot;Halo&quot;
+	servAddr := &quot;localhost:5555&quot;
+	tcpAddr, err := net.ResolveTCPAddr(&quot;tcp&quot;, servAddr)
+	if err != nil {
+		println(&quot;ResolveTCPAddr failed:&quot;, err.Error())
+		os.Exit(1)
+	}
+
+	println(&quot;connection established&quot;)
+	conn, err := net.DialTCP(&quot;tcp&quot;, nil, tcpAddr)
+	if err != nil {
+		println(&quot;Dial failed:&quot;, err.Error())
+		os.Exit(1)
+	}
+	
+    // sleep until connection closed
+	time.Sleep(3000 * time.Millisecond)
+
+	// first write to half-closed connection
+	time.Sleep(3000 * time.Millisecond)
+	_, err = conn.Write([]byte(strEcho))
+	if err != nil {
+		println(&quot;Write to server failed:&quot;, err.Error())
+		os.Exit(1)
+	}
+	println(&quot;writen to server = &quot;, strEcho)
+
+	// second write to half-closed connection
+	time.Sleep(3000 * time.Millisecond)
+	strEcho = &quot;Halo2&quot;
+	_, err = conn.Write([]byte(strEcho))
+	if err != nil {
+		println(&quot;Write to server failed:&quot;, err.Error())
+		os.Exit(1)
+	}
+
+	println(&quot;writen to server = &quot;, strEcho)
+
+	conn.Close()
+}
+</code></pre><p><strong>4 c++版的tcp client</strong></p><p>一个类似上述go版tcp client的c++版实现，看看要多少代码吧。</p><pre><code class=language-c++>#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;errno.h&gt;
+#include &lt;string.h&gt;
+#include &lt;netdb.h&gt;
+#include &lt;sys/types.h&gt;
+#include &lt;netinet/in.h&gt;
+#include &lt;sys/un.h&gt;
+#include &lt;sys/socket.h&gt;
+#include &lt;sys/unistd.h&gt;
+#include &lt;fcntl.h&gt;
+#include &lt;signal.h&gt;
+#include &lt;arpa/inet.h&gt;
+#include &lt;string.h&gt;
+#include &lt;sys/epoll.h&gt;
+
+#define MAX_EVENTS 1024
+
+static int processClient();
+
+int main(int argc, char *argv[])
+{
+    int fd;
+    int ret;
+
+    struct sockaddr_in addr = { 0 };
+    struct in_addr x;
+    inet_aton(&quot;127.0.0.1&quot;, &amp;x);
+    addr.sin_family = AF_INET;
+    addr.sin_addr = x;
+    addr.sin_port = htons(5555);
+
+    int set = 30;
+    int i = 0;
+    int fdFlag = 0;
+
+    int epollFd = epoll_create(MAX_EVENTS);
+    if (epollFd == -1)
+    {
+        printf(&quot;epoll_create failed\n&quot;);
+        return -1;
+    }
+
+    struct epoll_event ev;      // epollÊ¼þ½ṹÌ 
+    struct epoll_event events[MAX_EVENTS];  // Ê¼þ¼à¶ÓÐ 
+
+    // connect to server
+    fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (fd == -1)
+    {
+        printf(&quot;error:%s\n&quot;, strerror(errno));
+        return -1;
+    }
+    // set timer is valid ?
+    //setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, &amp;set, sizeof(set));
+
+    // set socket non block?
+    if ((fdFlag = fcntl(fd, F_GETFL, 0)) &lt; 0)
+        printf(&quot;F_GETFL error&quot;);
+    fdFlag |= O_NONBLOCK;
+
+    if (fcntl(fd, F_SETFL, fdFlag) &lt; 0)
+        printf(&quot;F_SETFL error&quot;);
+
+    //  connect to server
+    ret = connect(fd, (struct sockaddr *)&amp;addr, sizeof(addr));
+    if (ret == -1)
+    {
+        if (errno == EINPROGRESS)
+        {
+            printf(&quot; connect error:%s\n&quot;, strerror(errno));
+            //return -1;
+        }
+        else
+        {
+            printf(&quot; connect error:%s\n&quot;, strerror(errno));
+            return -1;
+        }
+    }
+
+    // epoll watch socket EPOLLOUT
+    ev.events = EPOLLOUT;
+    ev.data.fd = fd;
+    if (epoll_ctl(epollFd, EPOLL_CTL_ADD, fd, &amp;ev) == -1)
+    {
+        printf(&quot;epoll_ctl:server_sockfd register failed&quot;);
+        return -1;
+    }
+
+    int nfds;
+
+    // check whether tcpconn established, howto? write-ready!
+    while (1) {
+        nfds = epoll_wait(epollFd, events, MAX_EVENTS, -1);
+        if (nfds == -1) {
+            printf(&quot;start epoll_wait failed&quot;);
+            return -1;
+        }
+        if (nfds == 0) {
+            continue;
+        }
+        if (events[0].events &amp; EPOLLOUT) {
+            printf(&quot; connection is established\n&quot;);
+            break;
+        }
+    }
+    
+    // sleep 3 seconds, before wakeup let the server close connection!
+    // nc -kl 5555 -w 1
+    sleep(3);
+
+    char sendbuf[512] = { 0 };
+    char recvbuf[5120] = { 0 };
+    int count = 0;
+
+    // check whether epoll_wait can detect half-open tcpconn
+    ev.events = EPOLLIN | EPOLLET | EPOLLRDHUP;
+    ev.data.fd = fd;
+    if (epoll_ctl(epollFd, EPOLL_CTL_MOD, fd, &amp;ev) == -1)
+    {
+        printf(&quot;epoll_ctl:server_sockfd register failed\n&quot;);
+        return -1;
+    }
+    while (1) {
+        nfds = epoll_wait(epollFd, events, MAX_EVENTS, -1);
+        if (nfds == -1) {
+            printf(&quot;start epoll_wait failed\n&quot;);
+            return -1;
+        }
+        if (nfds == 0) {
+            printf(&quot;epoll_wait: no events ready\n&quot;);
+            continue;
+        }
+        int i = 0;
+        for (i=0; i&lt;nfds; i++) {
+            /*
+            if (events[i].events &amp; EPOLLRDHUP) {
+                printf(&quot; epoll_wait: EPOLLRDHUP, peer close connection\n&quot;);
+                close(events[i].data.fd);
+                return -1;
+            }
+            */
+            if (events[i].events &amp; EPOLLIN) {
+                printf(&quot; epoll_wait: read-ready\n&quot;);
+    
+                memset(recvbuf, 0, sizeof(recvbuf));
+                count = recv(events[i].data.fd, recvbuf, sizeof(recvbuf), 0);
+                printf(&quot;read bytes size:%d, data:%s\n&quot;, count, recvbuf);
+                if (count == -1)
+                {
+                    /* If errno == EAGAIN, that means we have read all data.
+                       So go back to the main loop. */
+                    if (errno != EAGAIN)
+                    {
+                        printf(&quot;read error\n&quot;);
+                        close(events[i].data.fd);
+                        return -1;
+                    }
+                }
+                else if (count == 0)
+                {
+                    /* End of file. The remote has closed the connection. */
+                    close(events[i].data.fd);
+                    printf(&quot;tcpconn is closed by peer\n&quot;);
+                    return -1;
+                }
+            }
+        }
+    }
+
+
+    // when write-ready, send data to server
+    // when read-ready, read data from server
+    int token_length = 5;
+    char *token_str = &quot;12345&quot;;
+    char *ch = &quot;yumgkevin&quot;;
+    char socketId[10] = { 0 };
+
+    while (1)
+    {
+        nfds = epoll_wait(epollFd, events, MAX_EVENTS, -1);
+        if (nfds == -1)
+        {
+            printf(&quot;start epoll_wait failed&quot;);
+            return -1;
+        }
+
+        for (i = 0; i &lt; nfds; i++)
+        {
+            /* 
+               if ((events[i].events &amp; EPOLLERR) || (events[i].events &amp;
+               EPOLLHUP) || (!(events[i].events &amp; EPOLLIN)) ||
+               (!(events[i].events &amp; EPOLLOUT)) ) { printf(&quot;enter 1&quot;);
+               fprintf (stderr, &quot;epoll error\n&quot;); close (events[i].data.fd);
+               continue; } */
+            if (events[i].events &amp; EPOLLOUT)
+            {
+                printf(&quot;write-ready, send data to server\n&quot;);
+                memset(sendbuf, 0, sizeof(sendbuf));
+                memset(socketId, 0, sizeof(socketId));
+
+                strcpy(sendbuf, token_str);
+                strcat(sendbuf, &quot;hellow, world&quot;);
+                strcat(sendbuf, ch);
+                sprintf(socketId, &quot;%d&quot;, events[i].data.fd);
+                strcat(sendbuf, socketId);
+                strcat(sendbuf, &quot;\r\n&quot;);
+
+                ret = send(events[i].data.fd, sendbuf, strlen(sendbuf), 0);
+                if (ret == -1)
+                {
+                    if (errno != EAGAIN)
+                    {
+                        printf(&quot;error:%s\n&quot;, strerror(errno));
+                        close(events[i].data.fd);
+                    }
+                    continue;
+                }
+                printf(&quot;send buf content is %s, size is %d\n&quot;, sendbuf, ret);
+                // add revelant socket read event
+                ev.data.fd = events[i].data.fd;
+                ev.events = EPOLLIN | EPOLLET;
+                epoll_ctl(epollFd, EPOLL_CTL_MOD, events[i].data.fd, &amp;ev);
+            }
+            else if (events[i].events &amp; EPOLLIN)
+            {
+                printf(&quot;read-ready, read data from server\n&quot;);
+                count = 0;
+                memset(recvbuf, 0, sizeof(recvbuf));
+                count = recv(events[i].data.fd, recvbuf, sizeof(recvbuf), 0);
+                if (count == -1)
+                {
+                    /* If errno == EAGAIN, that means we have read all data.
+                       So go back to the main loop. */
+                    if (errno != EAGAIN)
+                    {
+                        printf(&quot;read error\n&quot;);
+                        close(events[i].data.fd);
+                    }
+                    continue;
+                }
+                else if (count == 0)
+                {
+                    /* End of file. The remote has closed the connection. */
+                    close(events[i].data.fd);
+                    continue;
+                }
+                printf(&quot;receive data is:%s&quot;, recvbuf);
+                // add revelant socket write event
+                ev.data.fd = events[i].data.fd;
+                ev.events = EPOLLOUT;
+                epoll_ctl(epollFd, EPOLL_CTL_MOD, events[i].data.fd, &amp;ev);
+            }
+        }
+    }
+
+    // close socket
+    close(fd);
+
+    return 0;
+}
+</code></pre><p><strong>5 tcp状态转换图</strong>
+<img alt="tcp state diagram" src=/blog/assets/network/tcp_state_diagram.png class=myimg></p><div class=edit-page><a href=https://github.com/hitzhangjie/myspace/blob/master/content/blog/2018-12-20-write-closed-tcpconn.md><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentcolor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-edit-2"><path d="M17 3a2.828 2.828.0 114 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>Edit this page on GitHub</a></div><div class="docs-navigation d-flex justify-content-between"><a href=/blog/2019-02-23-macos%E5%AE%9E%E7%8E%B0%E9%AB%98%E6%95%88todolist/><div class="card my-1"><div class="card-body py-2">&larr; macOS实现高效todolist</div></div></a><a class=ms-auto href=/blog/2018-10-03-%E5%A4%A7%E8%A7%84%E6%A8%A1%E5%88%86%E5%B8%83%E5%BC%8F%E8%B7%9F%E8%B8%AA%E7%B3%BB%E7%BB%9Fdapper/><div class="card my-1"><div class="card-body py-2">大规模分布式跟踪系统dapper &rarr;</div></div></a></div></main></div></div></div><footer class="footer text-muted"><div class=container-xxl><div class=row><div class="col-lg-8 order-last order-lg-first"><ul class=list-inline><li class=list-inline-item>Powered by <a class=text-muted href=https://www.netlify.com/>Netlify</a>, <a class=text-muted href=https://gohugo.io/>Hugo</a>, and <a class=text-muted href=https://getdoks.org/>Doks</a></li></ul></div><div class="col-lg-8 order-first order-lg-last text-lg-end"><ul class=list-inline></ul></div><div class=col-lg-8 align=right><p><font size=-1>站点构建版本：v</font></p></div></div></div></footer><script src=/js/bootstrap.min.fdbe9b9ba88a036135318f3c721784d684ac9e3280fe282cc80d7d49f7f9c82780cd54228c1608685a230c09984300d7946fc471734d566fcebc148b65bd16db.js integrity="sha512-/b6bm6iKA2E1MY88cheE1oSsnjKA/igsyA19Sff5yCeAzVQijBYIaFojDAmYQwDXlG/EcXNNVm/OvBSLZb0W2w==" crossorigin=anonymous defer></script>
+<script src=/js/highlight.min.451fe6185924dcedf55c767559b5130f666f31c989f0078a75bafc346ad7364e180edfd731b1ca6bae0e90dfee88842885d284126ab0879f5067399e3a02b09e.js integrity="sha512-RR/mGFkk3O31XHZ1WbUTD2ZvMcmJ8AeKdbr8NGrXNk4YDt/XMbHKa64OkN/uiIQohdKEEmqwh59QZzmeOgKwng==" crossorigin=anonymous defer></script>
+<script src=/main.min.f16ffd9b364013a1df84be9cd7a45c470cb48639766bf5551e05bba845fe4ab150cb6436de43609bfed9af47c23bd5e395e9a10b932fa6fb2c4ee8f6cc78d7a3.js integrity="sha512-8W/9mzZAE6HfhL6c16RcRwy0hjl2a/VVHgW7qEX+SrFQy2Q23kNgm/7Zr0fCO9XjlemhC5MvpvssTuj2zHjXow==" crossorigin=anonymous defer></script>
+<script src=/index.min.4f5da6d5d5039814b7640914dc6d7af9b1826b54a2e8027123e345920f33e3dab6f98ed3b275444c8e3ce3de9faa12475d34fad04a0140d0a99b28e75bc5267c.js integrity="sha512-T12m1dUDmBS3ZAkU3G16+bGCa1Si6AJxI+NFkg8z49q2+Y7TsnVETI48496fqhJHXTT60EoBQNCpmyjnW8UmfA==" crossorigin=anonymous defer></script></body></html>

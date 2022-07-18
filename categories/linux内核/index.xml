@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>linux内核 on</title><link>/categories/linux%E5%86%85%E6%A0%B8/</link><description>Recent content in linux内核 on</description><generator>Hugo -- gohugo.io</generator><language>en-US</language><lastBuildDate>Thu, 07 Jul 2022 22:20:07 +0800</lastBuildDate><atom:link href="/categories/linux%E5%86%85%E6%A0%B8/index.xml" rel="self" type="application/rss+xml"/><item><title>kref引用计数与kobject对象管理</title><link>/blog/%E5%86%85%E5%AD%98%E7%AE%A1%E7%90%86kobject%E4%B8%8Ekref/</link><pubDate>Thu, 07 Jul 2022 22:20:07 +0800</pubDate><guid>/blog/%E5%86%85%E5%AD%98%E7%AE%A1%E7%90%86kobject%E4%B8%8Ekref/</guid><description>kref # kref可以为你自定义的结构体提供一个引用计数器，kobject也可以实 现该功能，但是kobject比较复杂，如果只是提供一个简单的引用计数器的话，应该使用 kref而不是kobject。
+kref可以嵌入在我们定义的结构体struct中，当我们初始化一个结构体时通过kref_init对其进行初始化（引用计数为1），当我们引用这个struct时需要通过kref_get来增加其引用计数，而当我们不再引用这个struct时，我们可以通过kref_put来减少引用计数，同时还可以提供一个data_release的函数，当引用计数为0时该函数就会执行。
+kref非常类似于c++中的智能指针的功能，gcc编译期对c语言也增加了一些类似的属性扩展，允许在变量作用域结束时执行注册的函数。可见，自定义类型中通过恰当地使用kref，我们就可以实现近似上述c++智能指针等高阶玩法。
+see kref.rst
+kobject # kobject又是什么呢，在面向对象领域中，对象有继承关系，派生对象需要实现抽象基类的方法，对象在没有被引用时也应该被自动销毁（联想c++析构函数）等。面向对象的那些思想在内核里面又是怎么样一种表现形式。
+无招胜有招，c虽然是过程式编程语言，但是其依然可以写出面向对象的代码来对完成对大型软件项目的设计构建。
+我们一般将kobject嵌入自定义的类型struct中来使用，同时还有对应的一个ktype：
+kobject，具备了引用计数功能，通过kobject_init/get/put操作可以对引用计数进行操作，另外kobject还有parent指针用来构建对象间的层级关系； ktype，用来描述每个kobject对象引用计数减为0时应该对这个包含kobject成员的struct类型执行何种操作，比如如何清理、释放之类的； ps：kset可以看做是一个集合，用来管理一系列的kobject，使用场景见kobject.rst。
+see kobject.rst
+总结 # 看完这几篇文档，更深地明白了一个道理，“能工模型，巧匠窃意”、“无招胜有招”，编程思想和编程工具是相辅相成的，前者帮助完善后者，后者便于更简单地推广前者。纵使是c语言这样的过程式编程语言，在牛人手里也可以提炼面向对象的精髓来建构更复杂的软件世界。</description></item><item><title>Linux内核学习资料</title><link>/blog/%E5%AD%A6%E4%B9%A0%E8%B5%84%E6%96%99/</link><pubDate>Sat, 02 Jul 2022 14:39:04 +0800</pubDate><guid>/blog/%E5%AD%A6%E4%B9%A0%E8%B5%84%E6%96%99/</guid><description>现在学习Linux操作系统的人越来越多了，进一步学习Kernel的人也越来越多了，经常有人问起有没有质量好的、获得大家认可的学习资料论坛，尤其是对于学习内核的新手而言，能否获得这些好的学习资料还是很重要的。因为经常有人问起这个问题，所以在Linux源码随附的文档中，有专门一篇文档kernel-docs.rst专门整理罗列了适合大家学习Linux内核的文档、在线资源、出版书籍等，并逐一做了简要的描述。注意到其中有些资料是和具体内核模块相关的，如网络协议栈、中断子系统等，也适合有针对性地、深入地去学习。
+本文剩余内容来自Linux内核文档 kernel-docs.rst，整理在此方便查阅参考。
+Docs at the Linux Kernel tree # The Sphinx books should be built with make {htmldocs | pdfdocs | epubdocs}.
+* Name: **linux/Documentation** :Author: Many. :Location: Documentation/ :Keywords: text files, Sphinx. :Description: Documentation that comes with the kernel sources, inside the Documentation directory. Some pages from this document (including this document itself) have been moved there, and might be more up to date than the web version. On-line docs # * Title: **Linux Kernel Mailing List Glossary** :Author: various :URL: https://kernelnewbies.</description></item><item><title>中断请求负载均衡</title><link>/blog/irq-balancing/</link><pubDate>Thu, 30 Jun 2022 07:45:47 +0800</pubDate><guid>/blog/irq-balancing/</guid><description>如果网卡NIC支持多队列，可以直接设置NIC多个队列的irq affinity到不同的CPU来实现负载均衡； 如果网卡NIC是单队列的，也可以通过RFS或者RPS在soft interrupt层面进行模拟，来实现负载均衡； RPS、RFS这种方式主要是针对单队列NIC的优化。
+我们是以网卡中断作为示例，对其他不同的设备其实也可以做类似处理。 并不是说所有的设备中断都需要绑定到多个cpu来实现负载均衡，因为有的外设的中断请求数可能并不多，就没必要了。
+多队列网卡ethtool -l eth0可以看到combined字段，该字段表明NIC有几个队列，如果有多个队列，比如8个， 那么对应的cpu affinity可以直接设置成ff，表示CPU0-7都可以收NIC中断请求来实现负载均衡。
+lspci -vvv可以看到不同的设备对应的中断号，如网卡设别可能是：pin A routed to IRQ 10，我们就知道10是其中断号。
+TODO:
+irq affinity设定了情况下，OS和硬件是如何交互的？如何负载均衡的，是在硬件层面实现的？ RPS/RFS，这种软中断层面的处理，具体细节是怎样的？ 下面以多队列网卡为例来说明怎么回事。
+多队列网卡实现原理 # 1.硬件实现原理 # 下图是Intel 82575硬件逻辑图，有四个硬件队列。当收到报文时，通过hash包头的SIP、Sport、DIP、Dport四元组，将一条流总是收到相同的队列。同时触发与该队列绑定的中断。
+2.单队列驱动原理 # kernel从2.6.21版本之前不支持多队列特性，一个网卡只能申请一个中断号，因此同一个时刻只有一个核在处理网卡收到的包。如图2.1，协议栈通过NAPI轮询收取各个硬件queue中的报文到图2.2的net_device数据结构中，通过QDisc队列将报文发送到网卡。
+2.多队列驱动原理 # 2.6.21开始支持多队列特性，当网卡驱动加载时，通过获取的网卡型号，得到网卡的硬件queue的数量，并结合CPU核的数量，最终通过Sum=Min（网卡queue，CPU core）得出所要激活的网卡queue数量（Sum），并申请Sum个中断号，分配给激活的各个queue。
+如图3.1，当某个queue收到报文时，触发相应的中断，收到中断的核，将该任务加入到协议栈负责收包的该核的NET_RX_SOFTIRQ队列中（NET_RX_SOFTIRQ在每个核上都有一个实例），在NET_RX_SOFTIRQ中，调用NAPI的收包接口，将报文收到CPU中如图3.2的有多个netdev_queue的net_device数据结构中。
+这样，CPU的各个核可以并发的收包，就不会因为一个核不能满足需求，导致网络IO性能下降。
+RSS（Receive Side Scaling，网卡的硬件特性，多队列网卡将不同的流分发到不同的CPU上实现负载均衡）需要硬件支持，在不支持RSS的环境中，RPS/RFS提供了软件的解决方案。
+RPS（Receive Packet Steering）是把一个rx队列的软中断分发到多个CPU核上，从而达到负载均衡的目的。 RFS（Receive Flow Steering）是RPS的扩展，RPS只依靠hash来控制数据包，提供负载平衡，但是没有考虑到应用程序的位置（指应用程序所在CPU）。RFS目标是通过指派应用线程正在运行的CPU处理中断，增加数据缓存的命中率。 参考内容：</description></item><item><title>中断请求亲和性</title><link>/blog/irq-affinity/</link><pubDate>Wed, 29 Jun 2022 20:48:50 +0800</pubDate><guid>/blog/irq-affinity/</guid><description>SMP IRQ affinity，指的是对称多处理器中的中断请求绑定。
+/proc/irq/IRQ#/smp_affinity和/proc/irq/IRQ#/smp_affinity_list指明了允许接收某 个中断请求IRQ#的多个或某个cpu。它是一个位掩码smp_affinity或者一个cpu列表 smp_affinity_list，其中记录了允许接受该中断请求的cpu。不允许禁止所有cpu接收该 中断请求，如果一个中断控制器不支持中断请求绑定，那么只能采用默认值，即允许所有 cpu接收该中断请求，并且这个值不会被修改。
+/proc/irq/default_smp_affinity指明了默认的中断绑定掩码，这个默认值将应用于所有 的非活动的、未激活的中断号。一旦一个中断号被分配、激活，那么它的中断绑定掩码将 被设置为这个默认值。这个默认值可以通过前面提到过的方法进行修改。这个默认掩码的 值为0xffffffff，请注意，该掩码是32位的。
+这里举个例子，网卡eth1中断请求IRQ44限定发送到CPU0-3，而后再限定发送到CPU4-7。
+网卡向cpu发中断请求44，下面我们对这个中断请求与cpu的绑定关系进行设置，并通过 ping命令进行测试，网卡会将接收到的icmp请求，以中断44的形式发送到绑定的cpu，通 过查看cpu接收到的中断请求数量，我们可以判断，这个44这个中断请求与cpu的绑定关系 。
+[root@moon 44]# cd /proc/irq/44 [root@moon 44]# cat smp_affinity ffffffff 首先，查看到44这个中断请求的默认绑定掩码为0xffffffff，说明，所有的cpu都可以接 收该中断请求。
+[root@moon 44]# echo 0f &amp;gt; smp_affinity [root@moon 44]# cat smp_affinity 0000000f 然后我们设置smp_affinity的值为0x0000000f，即使得编号为0-3的cpu允许接收该44这个 中断请求，其他的cpu都不会接收44这个中断请求。
+[root@moon 44]# ping -f h PING hell (195.4.7.3): 56 data bytes ... --- hell ping statistics --- 6029 packets transmitted, 6027 packets received, 0% packet loss round-trip min/avg/max = 0.</description></item><item><title>从0细说如何管理内存的？</title><link>/blog/%E5%86%85%E5%AD%98%E7%AE%A1%E7%90%86%E5%86%85%E5%AD%98%E5%88%86%E9%85%8D%E4%B8%8E%E9%87%8A%E6%94%BE/</link><pubDate>Mon, 27 Jun 2022 01:15:41 +0800</pubDate><guid>/blog/%E5%86%85%E5%AD%98%E7%AE%A1%E7%90%86%E5%86%85%E5%AD%98%E5%88%86%E9%85%8D%E4%B8%8E%E9%87%8A%E6%94%BE/</guid><description/></item><item><title>并发同步</title><link>/blog/%E5%B9%B6%E5%8F%91%E5%90%8C%E6%AD%A5/</link><pubDate>Mon, 27 Jun 2022 01:15:41 +0800</pubDate><guid>/blog/%E5%B9%B6%E5%8F%91%E5%90%8C%E6%AD%A5/</guid><description>并发同步，在并发编程中是非常重要的。当我们讨论并发编程时，我们的程序可能是通过多线程来实现，也可能通过多进程来实现。
+我们在OS理论中了解到进程是资源分配的最小单位，线程是调度的最小单位。在Linux里面，这么讲也是成立的。更细致地说，在Linux中，线程其实就是轻量级进程LWP来表示的。对Linux调度器而言，可调度实体既可以是进程、线程也可以是一个任务组，这个任务组中又可以有其他的可调度实体。
+有两个问题：
+当我们在单进程多线程中该如何通过？
+当我们在多个进程间进行同步时该如何同步？
+我们常用的同步的措施包括：
+mutex/rwmutex semaphore condition variable 我们处理最多的可能就是单进程多线程情况下的同步，使用上面这些来处理没啥好说的。现在思考下，如果要实现多个进程之间的同步，有没有办法呢？
+这些玩意的实现，本质上是基于处理器指令lock addr锁总线的这一基础控制，一步步实现了CAS、Spinlock、mutex/semaphore/condvar。所以其核心就是利用了锁一个内存地址总线来实现。
+ok，那么假设我们在当前进程全局变量中初始化了一个mutex变量，然后fork下当前进程，然后**父子进程能通过这个mutex变量进行同步控制吗？**不能！因为父子进程中复制后mutex是两个不同的内存变量，这两个变量的内存地址是不同的，其实就是两个不同的锁，所以无法通过这个mutex进行正确的同步控制。
+那怎么办呢？我们只要在共享的内存空间里面来初始化这个mutex变量就可以了（关键的就是lock的底层的内存地址一样就可以了），比如通过：
+buffer = (*buffer_t)mmap(NULL,4,devzeroFD,MAP_SHARED)，
+然后将buffer-&amp;gt;lock作为mutex变量进行初始化，因为mmap映射的时候指定了共享模式，此时初始化写内存时也是共享的，fork的子进程初始化时其实也是同一个锁（已经初始化过不会重复初始化吧？），然后后续加解锁都是在相同的地址上了，这个很好理解，映射的是同一段内存。就能正常完成多个进程之间的同步控制。
+其他的rwmutex/semaphore/condvar，理论上也可以通过相似的方法来实现。
+reference:
+1: 多进程并发同步控制, Synchronization Across Process Boundaries
+2: 支持优先级继承的锁, Priority Inheritance Mutex</description></item><item><title>为什么需要内存对齐，以及如何控制对齐</title><link>/blog/%E5%86%85%E5%AD%98%E5%AF%B9%E9%BD%90/</link><pubDate>Sun, 26 Jun 2022 23:57:00 +0800</pubDate><guid>/blog/%E5%86%85%E5%AD%98%E5%AF%B9%E9%BD%90/</guid><description>什么是内存对齐？ # 所谓的内存对齐，指的是我们的一些数据在内存中组织的时候，为了后续访问时效率更高，需要将其起始地址进行一定的对齐处理，最常见的就是将结构体各个成员起始地址分别对齐，非结构体比如一个普通的int数也会对齐处理的。
+举个int数的例子：
+int n = 100; printf(&amp;quot;n: %d\n&amp;quot;, n); printf(&amp;quot;sizeof(int): %lu, address: %p\n&amp;quot;, sizeof(n), &amp;amp;n); 运行后发现n的大小是4字节，地址是0x16d216c4c，hex &amp;lsquo;c&amp;rsquo;对应二进制数为1100，低位是00，00表示是4字节对齐的，那这个int数在内存中组织就是4字节对齐的。
+再看个struct结构体：
+typedef struct { char sex; int age; } Person; Person p; printf(&amp;quot;sizeof(person): %lu\n&amp;quot;, sizeof(p)); printf(&amp;quot;person.sex address: %p\n&amp;quot;, &amp;amp;p.sex); printf(&amp;quot;person.age address: %p\n&amp;quot;, &amp;amp;p.age); 运行后发现p的大小是8个字节，我们书本上学习过，sex放在地址0，age放在地址4处，sex后有3个padding char，这样整个是8个字节。然后我们继续看下地址:
+person address: 0x16fdbac44 person.sex address: 0x16fdbac44 person.age address: 0x16fdbac48 struct的首地址跟第一个成员的首地址是相同的，低位的44表示01000100，说明这个结构体本身以及内部成员sex都是4字节对齐的，然后age地址低位是01001000，在0x16fdbac44+4=0x16fdbac48，其实是4字节对齐的。这么看下来这个结构体中各个字段都是4字节对齐的。在sex和age之间padding了3个char。
+这就是内存对齐了，至少直观地知道是什么了。
+简单地说，当我们希望读取的数据字节数是N，该数据起始地址是addr，假设 addr % N == 0 就是aligned access，反之就是unaligned access。
+即便是基本类型也会对齐，对于结构体各个field都会对齐，当我们说一个struct是多少字节对齐时，指的是struct中field对齐用的字节数最大的一个。 不妨了解下go语言中的内存对齐规则，see: https://go.</description></item><item><title>对volatile的认识</title><link>/blog/volatile/</link><pubDate>Sun, 26 Jun 2022 23:57:00 +0800</pubDate><guid>/blog/volatile/</guid><description>关于这个我有一篇非常不错的总结，估计是全网最好的总结：你不认识的c/c++ volatile，虽然标题有点“博眼球”，但是内容绝对是很多高T都可能不知道的。
+今天翻之前整理的Linux内核文档笔记时，又看到了当时volatile相关的笔记，也是因为这个事情几年前听中心的高T分享时觉得他搞错了，才写的这篇总结。
+这里也放个简单的文档，系统性的强调下，认识正确了对于并发编程还是很重要的。
+see also linux volatile considered harmful，linus torvalds大佬亲笔。
+简单总结下的话就是：
+volatile，需要volatile，尤其是对于涉及到外设访问的情况，有些外设的设备端口是通过统一编址来的，使用某些访存指令而非专用的in/out指令的话，有可能读的数据会做优化，比如放到寄存器中，硬件cpu还可能放到cache中。对于这些设备的读操作，需要避免优化才能正常工作，所以需要volatile。这在c/c++设备驱动中应该比较有用。 volatile，在c/c++语言设计层面，没有保证线程可见性的任何保证，切记！它只是告知编译器不要做软件级别的寄存器优化而已，对于硬件级别的cache缓存没有任何控制。 volatile，不能保证线程可见性，但是在不同的处理器平台上却是会有不同的表现，比如在x86平台上，加了volatile修饰的变量就能够保证线程可见性。为什么呢？首先加了volatile修饰后避免了寄存器优化，现在还有cache的顾虑对吧，但是x86平台比较特殊，它使用了一种称作 tso的memory model，x86多核能够看到其他核对某个cacheline的修改，因此能感知到最新写的数据，能做到线程可见性。 volatile在其他平台内存模型不同，不一定能和x86一样实现线程可见性。 要想实现线程可见性，编译器一般是结合语言本身的特性，为止生成一些内存屏障指令，这些屏障指令最终会触发cache的MESIF协议来使得当前核上的修改对其他核可见。</description></item></channel></rss>

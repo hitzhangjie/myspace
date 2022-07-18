@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>devcontainer on</title><link>/tags/devcontainer/</link><description>Recent content in devcontainer on</description><generator>Hugo -- gohugo.io</generator><language>en-US</language><lastBuildDate>Tue, 28 Jun 2022 23:08:51 +0800</lastBuildDate><atom:link href="/tags/devcontainer/index.xml" rel="self" type="application/rss+xml"/><item><title>mac/win下linux c/c++开发</title><link>/blog/2022-06-28-linux-cc-%E5%BC%80%E5%8F%91%E7%8E%AF%E5%A2%83%E8%AE%BE%E7%BD%AE/</link><pubDate>Tue, 28 Jun 2022 23:08:51 +0800</pubDate><guid>/blog/2022-06-28-linux-cc-%E5%BC%80%E5%8F%91%E7%8E%AF%E5%A2%83%E8%AE%BE%E7%BD%AE/</guid><description>问题背景 # 我们很多人主力操作系统是macOS或者Windows，用Linux作为主力操作系统的少吧，不过之前确实有连续7年多是用Fedora作为主力操作系统 :)
+现在很多人开发人员使用MacBook Pro作为自己的开发机，大厂标配，我们很多后台呢，开发的程序一般最后还是要跑在Linux系统上的，尤其是c/c++开发涉及到这里的跨平台开发的问题，很多开发人员用着非常原始的方式在开发，开发体验比较差。
+借这个契机，我调研了下现在比较好的一些开发方式，总结分享下。
+先定一个要实现的小目标：
+能基于IDE进行开发，比如VSCode; 另外，编译构建必须能够 vscode: add dockerfile to workspace # 在vscode中cmd+p，输入add dockerfile to workspace并执行，此时会选择基础镜像，如面向c++开发的基础镜像，此时会生成默认的dockerfile。 然后在dockerfile选中后点击右键，选择build image，此时就完成镜像构建了，该默认dockerfile默认是一个编译镜像，里面包含了编译构建产物。 直接运行上述镜像默认就是运行程序，运行的方式可以在docker explorer里面找到镜像，右键菜单中选择Run，或者命令行执行。 这个镜像只是用来编译构建、测试运行的，还不能满足我们开发阶段的需求，因为开发阶段需要考虑头文件、库的搜索问题。
+解决思路：
+至少要构建一个支持开发的镜像，如c/c++镜像； 启动这个镜像，并将当前工程以volume的形式挂在到容器中，或者在容器中clone下来这个项目。提交代码要注意随时提交； 开发通过vscode remote连接到vscode server进行开发，其实是本地vscode通过ssh连接传输vscode server软件包到容器中并安装启动； 如果开发镜像支持类似WebIDE的方式进行开发，也可以代替3这种方式，只是一些本地vscode的快捷配置等可能不是很好同步。 docker desktop: New Dev environment # Docker Desktop的这种实现方式，就是上面提到的2\3这几步的组合，基本满足我们希望实现的目标了（支持开发容器Mount local directory或者容器中Clone git repository）。
+这种方式也有不足，就是假设后续有人要接手这个项目，或者有人和你协作，你怎么办呢？ 我们可以直接提交一个镜像push到registry，他只要能拉代码，又能拉镜像就基本能还原之前的开发环境。
+但是我为什么非要push一个镜像上去呢（包括自定义的基础镜像、开发阶段的分享镜像）？ 如果不push镜像而docker destop默认的开发镜像调整了或者我希望定制一个统一的怎么办？
+Docker Desktop创建新的开发镜像的时候有一种方式，允许指定一个基础镜像，但是这个基础镜像要push到远程registry。代码会被clone到这个 容器内部，我们就通过vscode remote进行开发即可。
+尽管vscode鼓励非Linux用户尽量通过这种方式，因为fs操作更快，但是还是有点不方便，因为这数据卷相当于额外浪费一份存储，考虑到之前已经克隆过的情况下。 有没有办法既能自定义基础镜像，又能挂载本地磁盘目录为数据卷的方式来解决呢？可以，请看方式3。
+vscode: Remote-Containers # vscode中Command Pallete中Remote-Containers: Add Development Container Configuration Files，执行这个我们可以为工程指定一个配置文件.</description></item></channel></rss>

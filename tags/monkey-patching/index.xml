@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>monkey-patching on</title><link>/tags/monkey-patching/</link><description>Recent content in monkey-patching on</description><generator>Hugo -- gohugo.io</generator><language>en-US</language><lastBuildDate>Sun, 23 Aug 2020 15:41:28 +0800</lastBuildDate><atom:link href="/tags/monkey-patching/index.xml" rel="self" type="application/rss+xml"/><item><title>Monkey Patching in Go</title><link>/blog/2020-08-23-monkey_patching_in_go/</link><pubDate>Sun, 23 Aug 2020 15:41:28 +0800</pubDate><guid>/blog/2020-08-23-monkey_patching_in_go/</guid><description>前几天写了篇x64汇编开发介绍的文章，当时有提到接下来会介绍下go中如何实现monkey patching，嗯，今天就来说下这个事情。
+Monkey Patching 简介 # monkey patching，一说到这个，很多熟悉go的同学可能会联想起gomonkey这个mock测试框架。该术语的定义取决于使用它的社区。在Ruby，Python 和许多其他动态编程语言中，“monkey patching”一词仅指在运行时对类或模块的动态修改，其目的是为了修补现有的第三方代码，以此作为解决方法。错误或功能无法正常运行。根据其不同的意图，在运行时修改类的其他形式也具有不同的名称。例如，在Zope和Plone中，安全补丁通常是使用动态类修改来提供的，但它们被称为热修补程序(hot fixes)。
+monkey pathcing，它常用语如下场景：
+在运行时替换方法/类/属性/函数，例如在测试过程中取消功能； 修改/扩展第三方产品的行为，而无需维护源代码的私有副本； 在运行时将补丁程序的结果应用于内存中的状态，而不是磁盘上的源代码； 分发与原始源代码一起存在的安全性或行为修复程序（例如，将其作为Ruby on Rails平台的插件分发）； 探索各种自动修复程序以提供自我修复。 Monkey Patching in Go # 最近在写mock测试的时候，有些场景下用到了gomonkey，这个测试框架挺好用的，之前也简单了解过大致的实现，最近也在看些底层工具链相关的东西，就想整理下这方面的一点东西。也希望能帮助到想了解这方面内容的同学。
+那现在就就开始吧，首先我会简单介绍下go函数的实现、指令patching的概念，然后看下反汇编、指令级调试如何帮助快速定位问题，然后通过几个简单的demo来演示下如何实现指令patch，然后我们再回到go实现monkey patching。
+怎么说呢，如果不感兴趣就真的不要看了，就好像别人骑车摔破头也觉得很爽，但是你觉得骑车没什么好玩的，一个道理。
+Go函数表示 # demo1 # 下面定义了一个简单的函数a()，然后再main函数中调用它，然后调用通过print打印出它的返回值。
+file: main.go
+package main func a() int { return 1 } func main() { print(a()) } 这个函数非常简单，monkey patching离不开汇编，所以我们先看下其对应的汇编代码，了解这个程序干了些啥。
+这里顺便推荐几个工具:
+dlv，适用于go的调试器 radare2，静态分析工具，类似的IDA、Hopper 我这里就先试用radare2（下文简称r2）来演示如何操作了。
+$ go build -gcflags=&amp;quot;all=-N -l&amp;quot; -o main main.</description></item></channel></rss>

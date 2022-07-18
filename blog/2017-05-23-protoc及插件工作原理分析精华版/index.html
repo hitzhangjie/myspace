@@ -1,0 +1,1666 @@
+<!doctype html><html lang=en-us><head><meta charset=utf-8><meta http-equiv=x-ua-compatible content="ie=edge"><meta name=viewport content="width=device-width,initial-scale=1,shrink-to-fit=no"><link rel=preload as=font href=/fonts/vendor/jost/jost-v4-latin-regular.woff2 type=font/woff2 crossorigin><link rel=preload as=font href=/fonts/vendor/jost/jost-v4-latin-500.woff2 type=font/woff2 crossorigin><link rel=preload as=font href=/fonts/vendor/jost/jost-v4-latin-700.woff2 type=font/woff2 crossorigin><link rel=stylesheet href=/main.63b6b8ff933309fcc94a30e21d69932290c8643fa1a32893f5681778c776ed3e51c237a1acd00b42426b3bf780c351b4a6ce75b3b659915ef0dd610b2e027a8c.css integrity="sha512-Y7a4/5MzCfzJSjDiHWmTIpDIZD+hoyiT9WgXeMd27T5RwjehrNALQkJrO/eAw1G0ps51s7ZZkV7w3WELLgJ6jA==" crossorigin=anonymous><noscript><style>img.lazyload{display:none}</style></noscript><meta name=robots content="index, follow"><meta name=googlebot content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1"><meta name=bingbot content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1"><title>Protoc及其插件工作原理分析(精华版) - MySpace</title><meta name=description content="团队经常使用protobuf作为消息交换格式，由于protobuf具有很强的自描述性，非常适合对一个服务进行建模。结合配套的编译器protoc，可以轻松理解服务信息，在此基础上可以开发一些脚手架工具（如protoc-gen-go）来完成代码生成、接口自动测试、生成api文档等等工作。本文就来介绍下protoc及其插件的工作原理，读完后读者将具备定制化protoc插件开发的能力。"><link rel=canonical href=/blog/2017-05-23-protoc%E5%8F%8A%E6%8F%92%E4%BB%B6%E5%B7%A5%E4%BD%9C%E5%8E%9F%E7%90%86%E5%88%86%E6%9E%90%E7%B2%BE%E5%8D%8E%E7%89%88/><meta property="og:locale" content="en_US"><meta property="og:type" content="article"><meta property="og:title" content="Protoc及其插件工作原理分析(精华版)"><meta property="og:description" content="团队经常使用protobuf作为消息交换格式，由于protobuf具有很强的自描述性，非常适合对一个服务进行建模。结合配套的编译器protoc，可以轻松理解服务信息，在此基础上可以开发一些脚手架工具（如protoc-gen-go）来完成代码生成、接口自动测试、生成api文档等等工作。本文就来介绍下protoc及其插件的工作原理，读完后读者将具备定制化protoc插件开发的能力。"><meta property="og:url" content="/blog/2017-05-23-protoc%E5%8F%8A%E6%8F%92%E4%BB%B6%E5%B7%A5%E4%BD%9C%E5%8E%9F%E7%90%86%E5%88%86%E6%9E%90%E7%B2%BE%E5%8D%8E%E7%89%88/"><meta property="og:site_name" content="MySpace"><meta property="article:published_time" content="2017-05-23T16:29:25+08:00"><meta property="article:modified_time" content="2017-05-23T16:29:25+08:00"><meta property="og:image" content="/doks.png"><meta property="og:image:alt" content="MySpace"><meta name=twitter:card content="summary_large_image"><meta name=twitter:site content="@hitzhangjie"><meta name=twitter:creator content="@hitzhangjie"><meta name=twitter:title content="Protoc及其插件工作原理分析(精华版)"><meta name=twitter:description content="团队经常使用protobuf作为消息交换格式，由于protobuf具有很强的自描述性，非常适合对一个服务进行建模。结合配套的编译器protoc，可以轻松理解服务信息，在此基础上可以开发一些脚手架工具（如protoc-gen-go）来完成代码生成、接口自动测试、生成api文档等等工作。本文就来介绍下protoc及其插件的工作原理，读完后读者将具备定制化protoc插件开发的能力。"><meta name=twitter:image content="/doks.png"><meta name=twitter:image:alt content="Protoc及其插件工作原理分析(精华版)"><script type=application/ld+json>{"@context":"https://schema.org","@graph":[{"@type":"Person","@id":"/#/schema/person/1","name":"","url":"/","sameAs":["https://twitter.com/hitzhangjie","https://www.linkedin.com/in/hitzhangjie/","https://github.com/hitzhangjie"],"image":{"@type":"ImageObject","@id":"/#/schema/image/1","url":"/\u003cnil\u003e","width":null,"height":null,"caption":""}},{"@type":"WebSite","@id":"/#/schema/website/1","url":"/","name":"MySpace","description":"MySpace is a hitzhangjie\u0027s personal space, for blogs, books, journey, thinkings.","publisher":{"@id":"/#/schema/person/1"}},{"@type":"WebPage","@id":"/blog/2017-05-23-protoc%E5%8F%8A%E6%8F%92%E4%BB%B6%E5%B7%A5%E4%BD%9C%E5%8E%9F%E7%90%86%E5%88%86%E6%9E%90%E7%B2%BE%E5%8D%8E%E7%89%88/","url":"/blog/2017-05-23-protoc%E5%8F%8A%E6%8F%92%E4%BB%B6%E5%B7%A5%E4%BD%9C%E5%8E%9F%E7%90%86%E5%88%86%E6%9E%90%E7%B2%BE%E5%8D%8E%E7%89%88/","name":"Protoc及其插件工作原理分析(精华版)","description":"团队经常使用protobuf作为消息交换格式，由于protobuf具有很强的自描述性，非常适合对一个服务进行建模。结合配套的编译器protoc，可以轻松理解服务信息，在此基础上可以开发一些脚手架工具（如protoc-gen-go）来完成代码生成、接口自动测试、生成api文档等等工作。本文就来介绍下protoc及其插件的工作原理，读完后读者将具备定制化protoc插件开发的能力。","isPartOf":{"@id":"/#/schema/website/1"},"about":{"@id":"/#/schema/person/1"},"datePublished":"2017-05-23T16:29:25CET","dateModified":"2017-05-23T16:29:25CET","breadcrumb":{"@id":"/blog/2017-05-23-protoc%E5%8F%8A%E6%8F%92%E4%BB%B6%E5%B7%A5%E4%BD%9C%E5%8E%9F%E7%90%86%E5%88%86%E6%9E%90%E7%B2%BE%E5%8D%8E%E7%89%88/#/schema/breadcrumb/1"},"primaryImageOfPage":{"@id":"/blog/2017-05-23-protoc%E5%8F%8A%E6%8F%92%E4%BB%B6%E5%B7%A5%E4%BD%9C%E5%8E%9F%E7%90%86%E5%88%86%E6%9E%90%E7%B2%BE%E5%8D%8E%E7%89%88/#/schema/image/2"},"inLanguage":"","potentialAction":[{"@type":"ReadAction","target":["/blog/2017-05-23-protoc%E5%8F%8A%E6%8F%92%E4%BB%B6%E5%B7%A5%E4%BD%9C%E5%8E%9F%E7%90%86%E5%88%86%E6%9E%90%E7%B2%BE%E5%8D%8E%E7%89%88/"]}]},{"@type":"BreadcrumbList","@id":"/blog/2017-05-23-protoc%E5%8F%8A%E6%8F%92%E4%BB%B6%E5%B7%A5%E4%BD%9C%E5%8E%9F%E7%90%86%E5%88%86%E6%9E%90%E7%B2%BE%E5%8D%8E%E7%89%88/#/schema/breadcrumb/1","name":"Breadcrumbs","itemListElement":[{"@type":"ListItem","position":1,"item":{"@type":"WebPage","@id":"/","url":"/","name":"Home"}},{"@type":"ListItem","position":2,"item":{"@id":"/blog2017-05-23-protoc%E5%8F%8A%E6%8F%92%E4%BB%B6%E5%B7%A5%E4%BD%9C%E5%8E%9F%E7%90%86%E5%88%86%E6%9E%90%E7%B2%BE%E5%8D%8E%E7%89%88/"}}]},{"@context":"https://schema.org","@graph":[{"@type":"Article","@id":"/#/schema/article/1","headline":"Protoc及其插件工作原理分析(精华版)","description":"团队经常使用protobuf作为消息交换格式，由于protobuf具有很强的自描述性，非常适合对一个服务进行建模。结合配套的编译器protoc，可以轻松理解服务信息，在此基础上可以开发一些脚手架工具（如protoc-gen-go）来完成代码生成、接口自动测试、生成api文档等等工作。本文就来介绍下protoc及其插件的工作原理，读完后读者将具备定制化protoc插件开发的能力。","isPartOf":{"@id":"/blog/2017-05-23-protoc%E5%8F%8A%E6%8F%92%E4%BB%B6%E5%B7%A5%E4%BD%9C%E5%8E%9F%E7%90%86%E5%88%86%E6%9E%90%E7%B2%BE%E5%8D%8E%E7%89%88/"},"mainEntityOfPage":{"@id":"/blog/2017-05-23-protoc%E5%8F%8A%E6%8F%92%E4%BB%B6%E5%B7%A5%E4%BD%9C%E5%8E%9F%E7%90%86%E5%88%86%E6%9E%90%E7%B2%BE%E5%8D%8E%E7%89%88/"},"datePublished":"2017-05-23T16:29:25CET","dateModified":"2017-05-23T16:29:25CET","author":{"@id":"/#/schema/person/2"},"publisher":{"@id":"/#/schema/person/1"},"image":{"@id":"/blog/2017-05-23-protoc%E5%8F%8A%E6%8F%92%E4%BB%B6%E5%B7%A5%E4%BD%9C%E5%8E%9F%E7%90%86%E5%88%86%E6%9E%90%E7%B2%BE%E5%8D%8E%E7%89%88/#/schema/image/2"}}]},{"@context":"https://schema.org","@graph":[{"@type":"Person","@id":"/#/schema/person/2","name":null,"sameAs":[]}]},{"@context":"https://schema.org","@graph":[{"@type":"ImageObject","@id":"/blog/2017-05-23-protoc%E5%8F%8A%E6%8F%92%E4%BB%B6%E5%B7%A5%E4%BD%9C%E5%8E%9F%E7%90%86%E5%88%86%E6%9E%90%E7%B2%BE%E5%8D%8E%E7%89%88/#/schema/image/2","url":"/doks.png","contentUrl":"/doks.png","caption":"Protoc及其插件工作原理分析(精华版)"}]}]}</script><meta name=theme-color content="#fff"><link rel=icon href=/favicon.ico sizes=any><link rel=icon type=image/svg+xml href=/favicon.svg><link rel=apple-touch-icon sizes=180x180 href=/apple-touch-icon.png><link rel=icon type=image/png sizes=32x32 href=/favicon-32x32.png><link rel=icon type=image/png sizes=16x16 href=/favicon-16x16.png><link rel=manifest crossorigin=use-credentials href=/site.webmanifest><script type=text/javascript src="https://platform-api.sharethis.com/js/sharethis.js#property=607868a58d7101001829a8df&product=sop" async></script><style>[alt~=sharing]{border:0;box-shadow:none}div#st-1{text-align:unset}div#st-1 .st-btn{height:24px;padding:0 4px}div#st-1 .st-btn>img{top:4.2px}div#st-2 .st-btn{height:24px;padding:0 4px}div#st-2 .st-btn>img{top:4.2px}</style></head><body class="blog single"><div class=sticky-top><div class=header-bar></div><header class="navbar navbar-expand-lg navbar-light doks-navbar"><nav class="container-xxl flex-wrap flex-lg-nowrap" aria-label="Main navigation"><a class="navbar-brand order-0" href=/ aria-label=MySpace>MySpace</a>
+<button class="btn btn-menu order-2 d-block d-lg-none" type=button data-bs-toggle=offcanvas data-bs-target=#offcanvasDoks aria-controls=offcanvasDoks aria-label="Open main menu"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentcolor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-menu"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button><div class="offcanvas offcanvas-end border-0 py-lg-1" tabindex=-1 id=offcanvasDoks data-bs-backdrop=true aria-labelledby=offcanvasDoksLabel><div class="header-bar d-lg-none"></div><div class="offcanvas-header d-lg-none"><h2 class="h5 offcanvas-title ps-2" id=offcanvasDoksLabel><a class=text-dark href=/>MySpace</a></h2><button type=button class="btn-close text-reset me-2" data-bs-dismiss=offcanvas aria-label="Close main menu"></button></div><div class="offcanvas-body p-4 p-lg-0"><ul class="nav flex-column flex-lg-row align-items-lg-center mt-2 mt-lg-0 ms-lg-2 me-lg-auto"><li class=nav-item><a class="nav-link ps-0 py-1 active" href=/blog/>Blog</a></li><li class=nav-item><a class="nav-link ps-0 py-1" href=/books/>Books</a></li><li class=nav-item><a class="nav-link ps-0 py-1" href=/journey/introduction>Journey</a></li></ul><hr class="text-black-50 my-4 d-lg-none"><form class="doks-search position-relative flex-grow-1 ms-lg-auto me-lg-2"><input id=search class="form-control is-search" type=search placeholder="Search docs..." aria-label="Search docs..." autocomplete=off><div id=suggestions class="shadow bg-white rounded d-none"></div></form><hr class="text-black-50 my-4 d-lg-none"><ul class="nav flex-column flex-lg-row"><li class=nav-item><a class="nav-link social-link" href=https://twitter.com/hitzhangjie><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentcolor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-twitter"><path d="M23 3a10.9 10.9.0 01-3.14 1.53 4.48 4.48.0 00-7.86 3v1A10.66 10.66.0 013 4s-4 9 5 13a11.64 11.64.0 01-7 2c9 5 20 0 20-11.5a4.5 4.5.0 00-.08-.83A7.72 7.72.0 0023 3z"/></svg><small class="ms-2 d-lg-none">Twitter</small></a></li><li class=nav-item><a class="nav-link social-link" href=https://github.com/hitzhangjie><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentcolor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-github"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37.0 00-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44.0 0020 4.77 5.07 5.07.0 0019.91 1S18.73.65 16 2.48a13.38 13.38.0 00-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07.0 005 4.77 5.44 5.44.0 003.5 8.55c0 5.42 3.3 6.61 6.44 7A3.37 3.37.0 009 18.13V22"/></svg><small class="ms-2 d-lg-none">GitHub</small></a></li></ul></div></div></nav></header></div><div class="wrap container-xxl" role=document><div class=content><div class="row flex-xl-nowrap"><div class="col-lg-5 col-xl-4 docs-sidebar"><nav class=docs-links aria-label="Main navigation"><h3>Tag List</h3><ol><li><a href=/tags/protoc/>protoc</a></li><li><a href=/tags/protoc-gen-go/>protoc-gen-go</a></li><li><a href=/tags/protobuf/>protobuf</a></li></ol></nav></div><nav class="docs-toc d-none d-xl-block col-xl-3" aria-label="Secondary navigation"><div class=page-links><h3>On this page</h3><nav id=TableOfContents><ul><li><ul><li><a href=#1-protoc工作原理分析>1. protoc工作原理分析</a><ul><li><a href=#10-protoc源代码准备>1.0. protoc源代码准备</a></li><li><a href=#11-protoc执行流程说明>1.1. protoc执行流程说明</a><ul><li><a href=#111-protoc程序入口>1.1.1. protoc程序入口</a></li><li><a href=#112-命令接口clirunargcargv执行流程>1.1.2. 命令接口cli.Run(argc,argv)执行流程</a></li><li><a href=#113-protoc执行逻辑总结>1.1.3. protoc执行逻辑总结</a></li></ul></li><li><a href=#2-protoc插件工作原理分析>2. protoc插件工作原理分析</a><ul><li><a href=#21-protoc-gen-go源代码准备>2.1. protoc-gen-go源代码准备</a></li><li><a href=#22-descriptorproto对proto文件的抽象描述>2.2. descriptor.proto，对proto文件的抽象&描述</a></li><li><a href=#23-可以提取proto文件中的哪些信息--如何提取>2.3. 可以提取proto文件中的哪些信息 & 如何提取</a></li><li><a href=#24-proto-gen-go源代码分析>2.4. proto-gen-go源代码分析</a></li><li><a href=#241-protoc-gen-go入口函数>2.4.1. protoc-gen-go入口函数</a></li><li><a href=#242-回顾一下codegeneratorrequest--codegeneratorresponse的定义>2.4.2. 回顾一下CodeGeneratorRequest & CodeGeneratorResponse的定义</a></li><li><a href=#243-proto-gen-go-generator实现分析>2.4.3. proto-gen-go generator实现分析</a></li><li><a href=#244-protoc-gen-go-grpc子插件实现>2.4.4. protoc-gen-go grpc子插件实现</a></li></ul></li></ul></li><li><a href=#3-总结>3. 总结</a></li></ul></li></ul></nav></div></nav><main class="docs-content col-lg-11 col-xl-9"><h1>Protoc及其插件工作原理分析(精华版)</h1><div style=display:flex><div>分享:&nbsp;&nbsp;</div><div><div class=sharethis-inline-share-buttons></div></div></div><hr><p class=lead></p><p>在进行protoc插件开发之前，首先要了解protoc的工作原理。protobuf具有诸多优点被广泛使用，由于protoc对proto文件的强大解析能力使我们可以更进一步来开发一些插件，通过插件快速生成特定于proto文件的工具类、配置文件等，从而提高开发效率。</p><p>本文首先会介绍一下protoc的整体工作原理，然后详细介绍一下protoc对proto文件的解析过程，最后给出编写protoc插件来扩展protoc功能的一个示例（这里以protoc-gen-go插件为例）。</p><h2 id=1-protoc工作原理分析>1. protoc工作原理分析 <a href=#1-protoc%e5%b7%a5%e4%bd%9c%e5%8e%9f%e7%90%86%e5%88%86%e6%9e%90 class=anchor aria-hidden=true>#</a><a href=#1-protoc工作原理分析 class=anchor aria-hidden=true>#</a></h2><h3 id=10-protoc源代码准备>1.0. protoc源代码准备 <a href=#10-protoc%e6%ba%90%e4%bb%a3%e7%a0%81%e5%87%86%e5%a4%87 class=anchor aria-hidden=true>#</a><a href=#10-protoc源代码准备 class=anchor aria-hidden=true>#</a></h3><p>要想了解protoc的工作机制，查看其源代码了解其核心流程是最靠谱的方法。</p><p>获取程序源代码的方式如下：</p><pre><code class=language-c>git co https://github.com/google/protobuf
+</code></pre><p>由于我们工程中常用的protoc版本是v2.5.0，所以这里检出对应版本的tag。</p><pre><code class=language-c>git ck v2.5.0
+</code></pre><p>考虑到可能会进行测试、修改、注释等学习过程，这里最好创建一个新的分支来操作。</p><pre><code class=language-c>git branch -b ${new-branch-name}
+</code></pre><p>现在源代码准备好了，下面可以阅读protoc的源码梳理一下其工作原理了。</p><p>上述git检出后的protobuf路径，记为${protobuf}，后面如果出现${protobuf}请知晓其含义。如果在描述源代码时没有提及代码起始路径${protobuf}，那么起始路径均为${protobuf}。</p><h3 id=11-protoc执行流程说明>1.1. protoc执行流程说明 <a href=#11-protoc%e6%89%a7%e8%a1%8c%e6%b5%81%e7%a8%8b%e8%af%b4%e6%98%8e class=anchor aria-hidden=true>#</a><a href=#11-protoc执行流程说明 class=anchor aria-hidden=true>#</a></h3><p>protoc执行流程的相关源码，主要包括如下两个部分。</p><h4 id=111-protoc程序入口>1.1.1. protoc程序入口 <a href=#111-protoc%e7%a8%8b%e5%ba%8f%e5%85%a5%e5%8f%a3 class=anchor aria-hidden=true>#</a><a href=#111-protoc程序入口 class=anchor aria-hidden=true>#</a></h4><p>protoc程序入口为以下源文件main函数，该入口函数中完成protoc命令行接口初始化、编程语言及代码生成器注册后，调用cli.Run(argc,argv)解析proto文件并生成特定语言的源代码。</p><p>file: src/google/protobuf/compiler/main.cc</p><pre><code class=language-c>// Author: kenton@google.com (Kenton Varda)
+
+// 这个头文件定义了protoc的命令行接口
+#include &lt;google/protobuf/compiler/command_line_interface.h&gt;
+
+// protoc中内置了对cpp、python、java语言的支持，对其他语言的支持需要以plugin的方式来支持
+#include &lt;google/protobuf/compiler/cpp/cpp_generator.h&gt;
+#include &lt;google/protobuf/compiler/python/python_generator.h&gt;
+#include &lt;google/protobuf/compiler/java/java_generator.h&gt;
+
+
+int main(int argc, char* argv[]) {
+
+	// 初始化protoc命令行接口并开启插件
+	// - 插件只是普通的可执行程序，其文件名以AllowPlugins参数protoc-开头
+	// - 假定protoc --foo_out，那么实际调用的插件是protoc-foo
+	google::protobuf::compiler::CommandLineInterface cli;
+	cli.AllowPlugins(&quot;protoc-&quot;);
+
+	// Proto2 C++ (指定了--cpp_out将调用cpp::Generator)
+	google::protobuf::compiler::cpp::CppGenerator cpp_generator;
+	cli.RegisterGenerator(&quot;--cpp_out&quot;, &quot;--cpp_opt&quot;, &amp;cpp_generator,
+	&quot;Generate C++ header and source.&quot;);
+
+	// Proto2 Java (指定了--java_out将调用java::Generator)
+	google::protobuf::compiler::java::JavaGenerator java_generator;
+	cli.RegisterGenerator(&quot;--java_out&quot;, &amp;java_generator,
+	&quot;Generate Java source file.&quot;);
+
+	// Proto2 Python (指定了python_out将调用python::Generator)
+	google::protobuf::compiler::python::Generator py_generator;
+	cli.RegisterGenerator(&quot;--python_out&quot;, &amp;py_generator,
+	&quot;Generate Python source file.&quot;);
+
+	return cli.Run(argc, argv);
+}
+</code></pre><h4 id=112-命令接口clirunargcargv执行流程>1.1.2. 命令接口cli.Run(argc,argv)执行流程 <a href=#112-%e5%91%bd%e4%bb%a4%e6%8e%a5%e5%8f%a3clirunargcargv%e6%89%a7%e8%a1%8c%e6%b5%81%e7%a8%8b class=anchor aria-hidden=true>#</a><a href=#112-命令接口clirunargcargv执行流程 class=anchor aria-hidden=true>#</a></h4><p>cli.Run(&mldr;)中，完成对proto文件的读取、解析，并通过注册的代码生成器或者protoc插件生成特定语言源代码，并最终完成源代码文件的创建。</p><pre><code class=language-c>int CommandLineInterface::Run(int argc, const char* const argv[]) {
+	Clear();
+	
+	// 解析命令行参数
+	switch (ParseArguments(argc, argv)) {
+		case PARSE_ARGUMENT_DONE_AND_EXIT: return 0;
+		case PARSE_ARGUMENT_FAIL: return 1;
+		case PARSE_ARGUMENT_DONE_AND_CONTINUE: break;
+	}
+
+	// 设置源码树
+	DiskSourceTree source_tree;
+	for (int i = 0; i &lt; proto_path_.size(); i++) {
+		source_tree.MapPath(proto_path_[i].first, proto_path_[i].second);
+	}
+
+	...
+	
+	// 分配一个importer(负责解析proto文件并创建对应的FileDescriptor对象)
+	Importer importer(&amp;source_tree, &amp;error_collector);
+
+	// 解析成功后的proto文件都会通过一个对应的FileDescriptor来表示
+	vector&lt;const FileDescriptor*&gt; parsed_files;
+
+	// 解析输入的proto文件
+	for (int i = 0; i &lt; input_files_.size(); i++) {
+		// 解析单个proto文件
+		const FileDescriptor* parsed_file = importer.Import(input_files_[i]);
+		
+		if (parsed_file == NULL) return 1;
+		parsed_files.push_back(parsed_file);
+
+		// 如果指定了--disallow_services则拒绝处理proto中service定义
+		if (disallow_services_ &amp;&amp; parsed_file-&gt;service_count() &gt; 0) {
+			cerr &lt;&lt; parsed_file-&gt;name() &lt;&lt; &quot;: This file contains services, but &quot;
+				&quot;--disallow_services was used.&quot; &lt;&lt; endl;
+			return 1;
+		}
+	}
+
+	// 为每个输出位置构造一个单独的GeneratorContext对象，有可能多个代码生成器的输出
+	// 位置是相同的，这种情况下，多个代码生成器应该共用同一个GeneratorContext对象以
+	// 使得OpenForInsert()能正常工作
+	typedef hash_map&lt;string, GeneratorContextImpl*&gt; GeneratorContextMap;
+	GeneratorContextMap output_directories;
+
+	// 针对proto文件生成特定语言的源代码
+	if (mode_ == MODE_COMPILE) {
+		// 一次处理一个输出指令(--foo_out=params:dir)
+		for (int i = 0; i &lt; output_directives_.size(); i++) {
+			string output_location = output_directives_[i].output_location;
+			if (!HasSuffixString(output_location, &quot;.zip&quot;) &amp;&amp;
+				!HasSuffixString(output_location, &quot;.jar&quot;)) {
+				AddTrailingSlash(&amp;output_location);
+			}
+			// 当前输出指令中的输出目录可能已经被记录下来了
+			GeneratorContextImpl** map_slot = &amp;output_directories[output_location];
+			// - 如果没有记录下来则分配一个关联的GeneratorContextImpl对象
+			if (*map_slot == NULL) {
+				*map_slot = new GeneratorContextImpl(parsed_files);
+			}
+			// - 参考输出指令，将解析成功的proto文件，生成对应的源代码信息，
+			// 这些信息会被记录在GeneratorContextImpl *map_slot中
+			if (!GenerateOutput(parsed_files, output_directives_[i], *map_slot)) {
+				STLDeleteValues(&amp;output_directories);
+				return 1;
+			}
+		}
+	}
+
+	// 创建源代码文件，并将生成的源代码信息写会磁盘
+	for (GeneratorContextMap::iterator iter = output_directories.begin();
+		iter != output_directories.end(); 
+		++iter) {
+		
+		const string&amp; location = iter-&gt;first;
+		GeneratorContextImpl* directory = iter-&gt;second;
+		if (HasSuffixString(location, &quot;/&quot;)) {
+			// 创建当前目录下所有的源代码文件
+			if (!directory-&gt;WriteAllToDisk(location)) {
+				STLDeleteValues(&amp;output_directories);
+				return 1;
+			}
+		} else {
+			if (HasSuffixString(location, &quot;.jar&quot;)) {
+				directory-&gt;AddJarManifest();
+			}
+
+			if (!directory-&gt;WriteAllToZip(location)) {
+				STLDeleteValues(&amp;output_directories);
+				return 1;
+			}
+		}
+	}
+
+	...
+	
+
+	return 0;
+}
+</code></pre><h4 id=113-protoc执行逻辑总结>1.1.3. protoc执行逻辑总结 <a href=#113-protoc%e6%89%a7%e8%a1%8c%e9%80%bb%e8%be%91%e6%80%bb%e7%bb%93 class=anchor aria-hidden=true>#</a><a href=#113-protoc执行逻辑总结 class=anchor aria-hidden=true>#</a></h4><p>通过查看2.1.1、2.1.2两部分代码，可以对protoc的执行流程做一个简单的概括：</p><ol><li><p>protoc main中初始化命令行参数接口cli;</p></li><li><p>开启以protoc-为前缀的插件作为第三方代码生成器使用，cli.AllowPlugins(&ldquo;protoc-")；</p></li><li><p>注册编程语言cpp、java、python及对应的代码生成器，cli.RegisterGenerator(&mldr;)；</p></li><li><p>解析proto文件并运行代码生成器或者protoc插件生成特定语言源代码、创建源代码文件，cli.Run(argc, argv);</p><ul><li>Clear()清空所有的数据备用；</li><li>ParseArguments(argc,argv)解析参数，对于protoc的某些内置参数的检查，对某些插件相关的&ndash;${lang}_out参数的检查等，将&ndash;${lang}_out作为输出指令保存起来；</li></ul><pre><code class=language-c>struct OutputDirective {
+	string name; // E.g. &quot;--foo_out&quot;
+	CodeGenerator* generator; // NULL for plugins
+	string parameter;
+	string output_location;
+};
+</code></pre><p>``</p><ul><li>参数解析成功之后，继续执行处理，设置源代码树、映射输入文件到虚拟路径、分配importer；</li><li>针对每个输入的proto文件进行解析，const FileDescriptor* parsed_file = importer.Import(input_files_[i])，解析成功后的文件会被加入到vector&lt;FileDescriptor*> parsed_files中记录，每一个proto文件解析后都可以用一个FileDescriptor结构体来表示；</li></ul><blockquote><p>备注：
+这里解析proto文件的过程是这样的，首先将proto文件中的内容分割成一个个的token，将内容拆分成一个个词素并检查有效性，也就是词法分析。如果词法分析检查无误则进入后续的语法分析过程，parser对输入token串进行文法相关的分析检查是否可以构成一棵有效的语法分析树，如果可以则表示语法正确。</p></blockquote><pre><code class=language-c>// Token定义如下
+struct Token {
+	TokenType type;
+	string text; // The exact text of the token as it appeared in
+	// the input. e.g. tokens of TYPE_STRING will still
+	// be escaped and in quotes.
+
+	// &quot;line&quot; and &quot;column&quot; specify the position of the first character of
+	// the token within the input stream. They are zero-based.
+	int line;
+	int column;
+	int end_column;
+};
+
+// Token类型定义如下
+enum TokenType {
+	TYPE_START, // Next() has not yet been called.
+	TYPE_END, // End of input reached. &quot;text&quot; is empty.
+
+	TYPE_IDENTIFIER, // A sequence of letters, digits, and underscores, not
+	// starting with a digit. It is an error for a number
+	// to be followed by an identifier with no space in
+	// between.
+	TYPE_INTEGER, // A sequence of digits representing an integer. Normally
+	// the digits are decimal, but a prefix of &quot;0x&quot; indicates
+	// a hex number and a leading zero indicates octal, just
+	// like with C numeric literals. A leading negative sign
+	// is NOT included in the token; it's up to the parser to
+	// interpret the unary minus operator on its own.
+	TYPE_FLOAT, // A floating point literal, with a fractional part and/or
+	// an exponent. Always in decimal. Again, never
+	// negative.
+	TYPE_STRING, // A quoted sequence of escaped characters. Either single
+	// or double quotes can be used, but they must match.
+	// A string literal cannot cross a line break.
+	TYPE_SYMBOL, // Any other printable character, like '!' or '+'.
+	// Symbols are always a single character, so &quot;!+$%&quot; is
+	// four tokens.
+};
+</code></pre><p>``
+语法分析的过程这里就不解释了，感兴趣的可以看一下protobuf中grammar的定义，无非也就是些规约的事情，只要能够按照grammar将词法分析输出的token串构建出一棵完整的语法分析树proto文件就是合法的，否则就是不合法的，至于语法分析过程中伴随的语义分析过程，语义分析过程中执行哪些语义动作，不说也知道，肯定是生成某些“中间代码”之类的鬼东西。学过编译原理的这些处理过程应该都是比较清楚的，这里就不再展开了。语法分析成功之后就得到了proto对应的FileDescriptor对象，因为可能输入的是多个proto，所以多个FileDescriptor就用vector来存储了。</p><ul><li>遍历之前记录下来的输出指令OutputDirective output_directives[]，output_directives[i].output_location指明了输出目录，针对输出目录创建GeneratorContextImpl，并记录到hash_map&lt;string, GeneratorContextImpl*> output_directories这个map中，key为flag_out,如&ndash;foo_out，value为GeneratorContextImpl。由于可能多个&ndash;${lang}_out都指向相同的输出目录，所以同一个GeneratorContextImpl也存在复用的情况。每个GeneratorContextImpl记录了一个输出目录、所有该目录下的待创建的源代码文件的信息，待创建的源代码文件信息记录在map&lt;string,string*> files_里面，key为源代码文件名，val为源代码文件的内容，另外还包括了一个vector&lt;FileDescriptor*> parsed_files记录了所有解析成功的proto文件信息。
+遍历output_directives的同时，因为同一个output_directives[i]对应的输出目录下可能有多个源代码文件要输出，并且不管flag_name是什么，要处理的proto文件都是相同的，所以每个output_directives[i]都会对其调用<strong>GenerateOutput</strong>(parsed_files, output_directives[i], *map_slot)，output_directives[i].plugin指明了语言的代码生成器(为NULL则使用插件)，对所有的解析成功的proto文件parsed_files[i]生成源代码，源代码全部输出到output_directive[i].output_location下，源代码的文件名都记录在parsed_files[i].name()里面，而最终生成的源代码信息都存储在这里的CodeGeneratorImpl **map_slot中，也就相当于存储在了output_directories[]中。</li><li>最后遍历output_directories[]，将每个输出目录下要写的所有文件的数据全部写出到磁盘，即output_directories[i]->WriteAllToDisk()。</li><li>done！</li></ul></li></ol><p>了解从proto到源代码生成的关键之处就是2.1.2节中cli.Run(&mldr;)方法中调用的GenerateOutput是怎么实现的，接着看。</p><h5 id=114-protoc-commandlineinterfacegenerateoutput实现>1.1.4 protoc CommandLineInterface::GenerateOutput(&mldr;)实现 <a href=#114-protoc-commandlineinterfacegenerateoutput%e5%ae%9e%e7%8e%b0 class=anchor aria-hidden=true>#</a><a href=#114-protoc-commandlineinterfacegenerateoutput实现 class=anchor aria-hidden=true>#</a></h5><p>下面看下GenerateOutput方法到底执行了哪些操作。</p><pre><code class=language-c>// 根据输出指示, 为解析成功的proto文件调用代码生成器生成对应的代码并存储到generator_context
+//@param parsed_files 所有解析成功的proto文件，每个解析成功的proto文件都用一个FileDescriptor来表示
+//@param output_directive 输出指示，其指明了目标语言、语言对应的代码生成器、输出目录等
+//@param generator_context 代码生成器上下文，可记录生成的代码
+bool CommandLineInterface::GenerateOutput(const vector&lt;const FileDescriptor*&gt;&amp; parsed_files, 
+										const OutputDirective&amp; output_directive, 
+										GeneratorContext* generator_context) {
+	string error;
+
+	// 如果输出指令中没有设置对应的代码生成器，表明没有在protoc main中注册语言对应的代码生成器，
+	// 这种情况下需要继续搜索是否存在对应的protoc插件来支持，若存在则调用该插件来充当代码生成器
+	if (output_directive.generator == NULL) {
+		// 这种情况下使用的是${PATH}中可搜索到的protoc插件
+		GOOGLE_CHECK(HasPrefixString(output_directive.name, &quot;--&quot;) 
+		    &amp;&amp; HasSuffixString(output_directive.name, &quot;_out&quot;))
+			&lt;&lt; &quot;Bad name for plugin generator: &quot; &lt;&lt; output_directive.name;
+
+		// 实际上protoc搜索插件对应的可执行程序的时候，搜索的名称是“protoc-gen-”+“语言”，
+		// 如果我们调用的是protoc --foo_out，那么实际搜索的就是protoc-gen-foo。
+		string plugin_name = plugin_prefix_ + &quot;gen-&quot; +
+		output_directive.name.substr(2, output_directive.name.size() - 6);
+
+		// 调用protoc插件来生成代码，这是我们要重点看的，我们就是要实现自己的protoc插件
+		if (!GeneratePluginOutput(parsed_files, plugin_name, output_directive.parameter, generator_context, &amp;error)) {
+			cerr &lt;&lt; output_directive.name &lt;&lt; &quot;: &quot; &lt;&lt; error &lt;&lt; endl;
+			return false;
+		}
+	} else {
+		// 这种是protoc main函数中正常注册的编程语言对应的代码生成器
+		string parameters = output_directive.parameter;
+		if (!generator_parameters_[output_directive.name].empty()) {
+			if (!parameters.empty()) {
+				parameters.append(&quot;,&quot;);
+			}
+			parameters.append(generator_parameters_[output_directive.name]);
+		}
+
+		// 为每个解析成功的proto文件生成代码
+		for (int i = 0; i &lt; parsed_files.size(); i++) {
+			if (!output_directive.generator-&gt;Generate(parsed_files[i], parameters, generator_context, &amp;error)) {
+				// Generator returned an error.
+				cerr &lt;&lt; output_directive.name &lt;&lt; &quot;: &quot; &lt;&lt; parsed_files[i]-&gt;name() &lt;&lt; &quot;: &quot; &lt;&lt; error &lt;&lt; endl;
+				return false;
+			}
+		}
+	}
+
+	return true;
+}
+</code></pre><h5 id=115-protoc调用插件生成代码的执行逻辑>1.1.5. protoc调用插件生成代码的执行逻辑 <a href=#115-protoc%e8%b0%83%e7%94%a8%e6%8f%92%e4%bb%b6%e7%94%9f%e6%88%90%e4%bb%a3%e7%a0%81%e7%9a%84%e6%89%a7%e8%a1%8c%e9%80%bb%e8%be%91 class=anchor aria-hidden=true>#</a><a href=#115-protoc调用插件生成代码的执行逻辑 class=anchor aria-hidden=true>#</a></h5><p>下面再来看一下GeneratePluginOutput是如何工作的。</p><pre><code class=language-c>// 调用protoc插件为解析成功的proto文件生成代码
+
+//@param parsed_files 解析成功的文件
+//@param plugin_name protoc插件名称（这个是拼接出来的protoc-gen-${lang}）
+//@param parameter 传给插件的参数
+//@param generator_context 代码生成器上下文，可记录生成的代码
+//@param error 代码生成过程中的错误信息
+bool CommandLineInterface::GeneratePluginOutput(const vector&lt;const FileDescriptor*&gt;&amp; parsed_files,
+												const string&amp; plugin_name,
+												const string&amp; parameter,
+												GeneratorContext* generator_context,
+												string* error) {
+	// protoc生成一个代码生成请求，并发送给插件
+	CodeGeneratorRequest request;
+
+	// protoc插件根据接收到的代码生成请求生成代码，并发送响应给protoc
+	CodeGeneratorResponse response;
+
+	// Build the request.
+	if (!parameter.empty()) {
+		request.set_parameter(parameter);
+	}
+
+	set&lt;const FileDescriptor*&gt; already_seen;
+	for (int i = 0; i &lt; parsed_files.size(); i++) {
+		request.add_file_to_generate(parsed_files[i]-&gt;name());
+		GetTransitiveDependencies(parsed_files[i],
+								true, // Include source code info.
+								&amp;already_seen, request.mutable_proto_file());
+	}
+
+	// fork出一个子进程，子进程来执行插件完成代码生成工作，
+	// 父子进程之间是通过管道通信完成请求、响应过程，如何控制子进程的stdin、stdout，
+	// 这个可以通过dup2或者dup3来控制间fd 0、1分别设置到管道的读端、写端。
+	// 事实上protobuf的开发人员也是这么来实现的。
+
+	// 子进程通过exec来搜索执行插件程序
+	Subprocess subprocess;
+
+	if (plugins_.count(plugin_name) &gt; 0) {
+		subprocess.Start(plugins_[plugin_name], Subprocess::EXACT_NAME);
+	} else {
+		subprocess.Start(plugin_name, Subprocess::SEARCH_PATH);
+	}
+
+	string communicate_error;
+
+	// 请求插件生成代码
+	if (!subprocess.Communicate(request, &amp;response, &amp;communicate_error)) {
+		*error = strings::Substitute(&quot;$0: $1&quot;, plugin_name, communicate_error);
+		return false;
+	}
+
+	// Write the files. We do this even if there was a generator error in order
+	// to match the behavior of a compiled-in generator.
+	scoped_ptr&lt;io::ZeroCopyOutputStream&gt; current_output;
+	for (int i = 0; i &lt; response.file_size(); i++) {
+		const CodeGeneratorResponse::File&amp; output_file = response.file(i);
+
+		if (!output_file.insertion_point().empty()) {
+
+			// 首先关闭当前正在写入的文件数据（用CodeGeneratorResponse表示）
+			// 打开待写入的文件数据，这个文件数据已经存在，定位到准确的插入点位置执行写入，然后关闭文件
+			// - 这里的插入点如何定义，我们在后面再进行说明。具体可参考plugin.proto和plugin.pb.h。
+			current_output.reset();
+
+			// OpenForInsert返回一个输出流，以方便后面写入编码后数据
+			current_output.reset(generator_context-&gt;OpenForInsert(output_file.name(), output_file.insertion_point()));
+
+		} else if (!output_file.name().empty()) {
+		
+			// 首先关闭当前正在写入的文件数据（用CodeGeneratorResponse表示）
+			// 打开待写入的文件数据，这个文件数据不存在，不存在插入点信息，从开始处执行写入
+			current_output.reset();
+
+			// OpenForInsert返回一个输出流，以方便后面写入编码后数据
+			current_output.reset(generator_context-&gt;Open(output_file.name()));
+			
+		} else if (current_output == NULL) {
+		
+			*error = strings::Substitute(
+			&quot;$0: First file chunk returned by plugin did not specify a file name.&quot;,
+			plugin_name);
+			return false;
+		}
+
+		// 从CodeGeneratorResponse中获取输出流，写出，这里输出流中的数据时存储在GeneratorContextImpl中的，
+		// GenerateOutput调用成功之后后面会遍历每一个GenerateContextImpl完成WriteAllToDisk()的操作。
+		// Use CodedOutputStream for convenience; otherwise we'd need to provide
+		// our own buffer-copying loop.
+		io::CodedOutputStream writer(current_output.get());
+		writer.WriteString(output_file.content());
+	}
+
+	// 检查有没有错误
+	if (!response.error().empty()) {
+		// Generator returned an error.
+		*error = response.error();
+		return false;
+	}
+
+	return true;
+}
+
+</code></pre><h5 id=116-protoc--protoc插件数据交互的执行逻辑>1.1.6. protoc & protoc插件数据交互的执行逻辑 <a href=#116-protoc--protoc%e6%8f%92%e4%bb%b6%e6%95%b0%e6%8d%ae%e4%ba%a4%e4%ba%92%e7%9a%84%e6%89%a7%e8%a1%8c%e9%80%bb%e8%be%91 class=anchor aria-hidden=true>#</a><a href=#116-protoc--protoc插件数据交互的执行逻辑 class=anchor aria-hidden=true>#</a></h5><p>整体执行逻辑差不多理清楚了，然后这里我们需要看一下父进程给子进程发送的代码生成请求是什么，收到的代码生成的响应又是什么，以及父子进程通信的细节、子进程对请求的处理过程等。</p><p>先来看下plugin.proto的定义，protoc内置的支持语言里面并不包含go，我们后面需要用go来编写我们自己的插件，所以必须使用protoc的go插件来生成go对应的plugin.go代码，然后我们自己写一些业务类插件（非语言插件）的时候才能用上plugin.go。扯这么多是为了让大家明白这里为什么需要看下plugin.proto，而不是误解为只是在堆砌内容。看了这里的plugin.proto之后才能理解到protoc中的插件机制的边界时什么，我们就可以明白利用protoc的插件机制，我们可以做到什么程度，哪些功能能实现，哪些实现不了，这个是很重要的。</p><p>file: src/google/protobuf/compiler/plugin.proto</p><pre><code class=language-c>// protoc (aka the Protocol Compiler) can be extended via plugins. A plugin is
+// just a program that reads a CodeGeneratorRequest from stdin and writes a
+// CodeGeneratorResponse to stdout.
+//
+// Plugins written using C++ can use google/protobuf/compiler/plugin.h instead
+// of dealing with the raw protocol defined here.
+//
+// A plugin executable needs only to be placed somewhere in the path. The
+// plugin should be named &quot;protoc-gen-$NAME&quot;, and will then be used when the
+// flag &quot;--${NAME}_out&quot; is passed to protoc.
+
+package google.protobuf.compiler;
+option java_package = &quot;com.google.protobuf.compiler&quot;;
+option java_outer_classname = &quot;PluginProtos&quot;;
+
+import &quot;google/protobuf/descriptor.proto&quot;;
+
+// 发送给插件的代码生成请求
+// An encoded CodeGeneratorRequest is written to the plugin's stdin.
+message CodeGeneratorRequest {
+	// The .proto files that were explicitly listed on the command-line. The
+	// code generator should generate code only for these files. Each file's
+	// descriptor will be included in proto_file, below.
+
+	//proto文件列表对应的要生成的文件的源代码文件的名字
+	repeated string file_to_generate = 1;
+
+	// The generator parameter passed on the command-line.
+	//传递给插件代码生成器的参数
+	optional string parameter = 2;
+
+	// FileDescriptorProtos for all files in files_to_generate and everything
+	// they import. The files will appear in topological order, so each file
+	// appears before any file that imports it.
+	//
+	// protoc guarantees that all proto_files will be written after
+	// the fields above, even though this is not technically guaranteed by the
+	// protobuf wire format. This theoretically could allow a plugin to stream
+	// in the FileDescriptorProtos and handle them one by one rather than read
+	// the entire set into memory at once. However, as of this writing, this
+	// is not similarly optimized on protoc's end -- it will store all fields in
+	// memory at once before sending them to the plugin.
+
+	// 每一个正确解析的proto文件都用一个FileDescriptorProto来表示；
+	// 这里的FileDescriptorProto与FileDescriptor其实是对应的，在请求插件进行代码
+	// 生成的时候直接就有这样的代码FileDescriptor::CopyTo(FileDescriptorProto&amp;)
+	// 的用法。而在descriptor.h和descriptor.proto中查看二者的描述时，其注释清清
+	// 楚楚地写着都是描述的一个完整的proto文件。
+	repeated FileDescriptorProto proto_file = 15; 
+}
+
+// 插件返回的代码生成响应
+// The plugin writes an encoded CodeGeneratorResponse to stdout.
+message CodeGeneratorResponse {
+	// Error message. If non-empty, code generation failed. The plugin process
+	// should exit with status code zero even if it reports an error in this way.
+	//
+	// This should be used to indicate errors in .proto files which prevent the
+	// code generator from generating correct code. Errors which indicate a
+	// problem in protoc itself -- such as the input CodeGeneratorRequest being
+	// unparseable -- should be reported by writing a message to stderr and
+	// exiting with a non-zero status code.
+
+	// 错误信息
+	optional string error = 1;
+
+	// Represents a single generated file.
+	// 生成的源代码文件消息类型，注意这里是一个内部类型
+	message File {
+	// 待生成的源代码文件名（相对于输出目录），文件名中不能包括.或者..，路径是
+	// 相对输出目录的路径，不能用绝对路径，另分隔符必须用/。
+	// 如果name没有指定，那么输出的内容将追加到前一个输出的源代码文件中，这种
+	// 方式使得代码生成器能够将一个大文件的生成分多次写入来完成，不用一次性将很
+	// 大数据量的数据放在内存中。这里需要指出的是，protoc中并没有针对这种情况
+	// 进行特殊的优化，它等待读取完整的CodeGeneratorResponse再写出到磁盘。
+	optional string name = 1;
+
+	// 如果insertion_point不空的话，name字段也不能为空，并且假定name字段指定的
+	// 文件已经存在了。这里的内容将被插入到name指定的文件中的特定插入点（注解）的
+	// 上一行。这有助于扩展代码生成器输出的内容。在一次protoc调用中，可能会同
+	// 时指定多个protoc插件，前面的插件可能会在输出的内容中指定插入点，后面的
+	// 插件可能会在这些指定的插入点的位置继续扩展代码内容。
+	// 例如，前面的一个插件在输出的代码内容中增加了这样一行注解：
+	// @@protoc_insertion_point(NAME)
+	// 这样就定义了一个插入点，插入点前面、后面可以包含任意的文本内容，即使在
+	// 注释里面也是可以的。这里的插入点定义中的NAME应该可以唯一标识一个插入点
+	// 才可以，类似于标识符，以供其他的插件使用，插件插入代码的时候将从插入点
+	// 的上一行开始自行插入。如果包含多个插入点的话，插入点的内容将被插件依次
+	// 扩展。
+	//
+	// 一开始创建这个源代码文件的代码生成器或者插件与后面的继续扩展源代码插入
+	// 点位置内容的代码生成器或者插件，必须在protoc的同一次调用中，代码生成器
+	// 或者插件按照protoc命令行调用过程中指定的顺序依次调用。
+	optional string insertion_point = 2;
+
+	// 待写入到源代码中的内容
+	optional string content = 15;
+	}
+
+	// 一次要处理的 proto文件可能有多个，所以插件处理后这里的file是一个list
+	repeated File file = 15;
+}
+</code></pre><p>下面看一下protoc与protoc插件这对父子进程之间是怎么通信的。</p><pre><code class=language-c>class LIBPROTOC_EXPORT Subprocess {
+	public:
+		Subprocess();
+		~Subprocess();
+
+		enum SearchMode {
+		SEARCH_PATH, // Use PATH environment variable.
+		EXACT_NAME // Program is an exact file name; don't use the PATH.
+		};
+
+		// Start the subprocess. Currently we don't provide a way to specify
+		// arguments as protoc plugins don't have any.
+		void Start(const string&amp; program, SearchMode search_mode);
+
+		// Serialize the input message and pipe it to the subprocess's stdin, then
+		// close the pipe. Meanwhile, read from the subprocess's stdout and parse
+		// the data into *output. All this is done carefully to avoid deadlocks.
+		// Returns true if successful. On any sort of error, returns false and sets
+		// *error to a description of the problem.
+		bool Communicate(const Message&amp; input, Message* output, string* error);
+
+		// win32 relevant ... neglect
+
+	private:
+		#ifdef _WIN32
+		// ...
+
+		#else // !_WIN32
+		pid_t child_pid_;
+
+		// The file descriptors for our end of the child's pipes. We close each and
+		// set it to -1 when no longer needed.
+		int child_stdin_;
+		int child_stdout_;
+
+		#endif 
+};
+</code></pre><p>下面是Linux平台下的子进程启动处理逻辑。</p><pre><code class=language-c>void Subprocess::Start(const string&amp; program, SearchMode search_mode) {
+	// Note that we assume that there are no other threads, thus we don't have to
+	// do crazy stuff like using socket pairs or avoiding libc locks.
+
+	// [0] is read end, [1] is write end.
+	int stdin_pipe[2];
+	int stdout_pipe[2];
+
+	GOOGLE_CHECK(pipe(stdin_pipe) != -1);
+	GOOGLE_CHECK(pipe(stdout_pipe) != -1);
+
+	char* argv[2] = { strdup(program.c_str()), NULL };
+
+	child_pid_ = fork();
+	if (child_pid_ == -1) {
+		GOOGLE_LOG(FATAL) &lt;&lt; &quot;fork: &quot; &lt;&lt; strerror(errno);
+	} else if (child_pid_ == 0) {
+		// We are the child.
+		// 将子进程的stdin重定向到stdin_pipe的读端
+		dup2(stdin_pipe[0], STDIN_FILENO);
+		// 将子进程的stdout重定向到stdout_pipe的写端
+		dup2(stdout_pipe[1], STDOUT_FILENO);
+
+		// 子进程通过0、1对管道进行操作就够了，释放多余的fd
+		close(stdin_pipe[0]);
+		close(stdin_pipe[1]);
+		close(stdout_pipe[0]);
+		close(stdout_pipe[1]);
+
+		// 根据程序搜索模式调用exec族函数来调用插件执行，exec族函数通过替换当前进
+		// 程的代码段、数据段等内存数据信息，然后调整寄存器信息，使得进程转而去执
+		// 行插件的代码。插件代码执行之前进程就已经将fd 0、1重定向到父进程clone过
+		// 来的管道了，因此插件程序的输出将直接被输出到父进程创建的管道中。
+		// 正常情况下，exec一旦执行成功，那么久绝不对执行switch后续的代码了，只有
+		// 出错才可能会执行到后续的代码。
+		switch (search_mode) {
+		case SEARCH_PATH:
+		execvp(argv[0], argv);
+		break;
+		case EXACT_NAME:
+		execv(argv[0], argv);
+		break;
+		}
+
+		// 只有出错才可能会执行到这里的代码。
+		// Write directly to STDERR_FILENO to avoid stdio code paths that may do
+		// stuff that is unsafe here.
+		int ignored;
+		ignored = write(STDERR_FILENO, argv[0], strlen(argv[0]));
+		const char* message = &quot;: program not found or is not executable\n&quot;;
+		ignored = write(STDERR_FILENO, message, strlen(message));
+		(void) ignored;
+
+		// Must use _exit() rather than exit() to avoid flushing output buffers
+		// that will also be flushed by the parent.
+		_exit(1);
+	} else {
+		free(argv[0]);
+
+		// 父进程释放无用的fd
+		close(stdin_pipe[0]);
+		close(stdout_pipe[1]);
+
+		// 子进程的stdin，对父进程来说也就是管道stdin_pipe的写端，CodeGeneratorRequest将通过这个fd写给子进程
+		child_stdin_ = stdin_pipe[1];
+		// 子进程的stdout，对父进程来说也就是管道stdout_pipe的读端，CodeGeneratorResponse将通过这个fd从子进程读取
+		child_stdout_ = stdout_pipe[0];
+	}
+}
+</code></pre><p>下面接着看父进程读取子进程返回的CodeGeneratorResponse的执行逻辑。</p><pre><code class=language-c>//protoc进程和protoc插件进程通信
+//
+//@param protoc进程发送到protoc插件进程的代码生成请求
+//@param protoc插件进程返回给protoc进程的代码生成响应
+//@param error 错误信息
+bool Subprocess::Communicate(const Message&amp; input, Message* output, string* error) {
+
+	GOOGLE_CHECK_NE(child_stdin_, -1) &lt;&lt; &quot;Must call Start() first.&quot;;
+
+	// The &quot;sighandler_t&quot; typedef is GNU-specific, so define our own.
+	typedef void SignalHandler(int);
+
+	// 屏蔽信号SIGPIPE，防止没有指定信号处理函数的情况下被kill掉
+	SignalHandler* old_pipe_handler = signal(SIGPIPE, SIG_IGN);
+
+	string input_data = input.SerializeAsString();
+	string output_data;
+
+	int input_pos = 0;
+	int max_fd = max(child_stdin_, child_stdout_);
+
+	// child_stdout==-1的时候表示子进程返回的数据已经读取完毕了，可以gg了
+	while (child_stdout_ != -1) {
+		fd_set read_fds;
+		fd_set write_fds;
+		FD_ZERO(&amp;read_fds);
+		FD_ZERO(&amp;write_fds);
+		if (child_stdout_ != -1) {
+			FD_SET(child_stdout_, &amp;read_fds);
+		}
+		if (child_stdin_ != -1) {
+			FD_SET(child_stdin_, &amp;write_fds);
+		}
+
+		// 这种情景下也用select，果然很google！
+		if (select(max_fd + 1, &amp;read_fds, &amp;write_fds, NULL, NULL) &lt; 0) {
+			if (errno == EINTR) {
+				// 被信号中断了，再次尝试
+				continue;
+			} else {
+				GOOGLE_LOG(FATAL) &lt;&lt; &quot;select: &quot; &lt;&lt; strerror(errno);
+			}
+		}
+
+		// stdout_pipe写事件就绪，写请求CodeGeneratorRequest给子进程
+		if (child_stdin_ != -1 &amp;&amp; FD_ISSET(child_stdin_, &amp;write_fds)) {
+			int n = write(child_stdin_, input_data.data() + input_pos, input_data.size() - input_pos);
+			if (n &lt; 0) {
+				// Child closed pipe. Presumably it will report an error later.
+				// Pretend we're done for now.
+				input_pos = input_data.size();
+			} else {
+				input_pos += n;
+			}
+
+			// 代码生成请求已经成功写给子进程了，关闭相关的fd
+			if (input_pos == input_data.size()) {
+				// We're done writing. Close.
+				close(child_stdin_);
+				child_stdin_ = -1;
+			}
+		}
+
+		// stdin_pipe读事件就绪，读取子进程返回的CodeGeneratorResponse
+		if (child_stdout_ != -1 &amp;&amp; FD_ISSET(child_stdout_, &amp;read_fds)) {
+			char buffer[4096];
+			int n = read(child_stdout_, buffer, sizeof(buffer));
+
+			if (n &gt; 0) {
+				output_data.append(buffer, n);
+			} else {
+				// 子进程返回的CodeGeneratorResponse已经读取完毕，关闭相关的fd
+				close(child_stdout_);
+				child_stdout_ = -1;
+			}
+		}
+	}
+
+	// 子进程还没有读取CodeGeneratorRequest完毕，就关闭了输出，这种情况下也不可
+	// 能读取到返回的CodeGeneratorResponse了，这种情况很可能是出现了异常。
+	if (child_stdin_ != -1) {
+		// Child did not finish reading input before it closed the output.
+		// Presumably it exited with an error.
+		close(child_stdin_);
+		child_stdin_ = -1;
+	}
+
+	// 等待子进程结束，子进程退出之后，需要父进程来清理子进程占用的部分资源。
+	// 如果当前父进程不waitpid的话，子进程的父进程会变为init或者systemd进程，同
+	样也会被清理的。
+	int status;
+	while (waitpid(child_pid_, &amp;status, 0) == -1) {
+		if (errno != EINTR) {
+			GOOGLE_LOG(FATAL) &lt;&lt; &quot;waitpid: &quot; &lt;&lt; strerror(errno);
+		}
+	}
+
+	// 刚才为了阻止SIGPIPE信号到达时导致进程终止，我们修改了SIGPIPE的信号处理函
+	// 数，这里可以恢复之前的SIGPIPE的信号处理函数。
+	signal(SIGPIPE, old_pipe_handler);
+
+	// 根据子进程的退出状态执行后续的处理逻辑
+	// - 异常处理
+	if (WIFEXITED(status)) {
+		if (WEXITSTATUS(status) != 0) {
+			int error_code = WEXITSTATUS(status);
+			*error = strings::Substitute(&quot;Plugin failed with status code $0.&quot;, error_code);
+			return false;
+		}
+	} else if (WIFSIGNALED(status)) {
+		int signal = WTERMSIG(status);
+		*error = strings::Substitute(&quot;Plugin killed by signal $0.&quot;, signal);
+		return false;
+	} else {
+		*error = &quot;Neither WEXITSTATUS nor WTERMSIG is true?&quot;;
+		return false;
+	}
+
+	// 将子进程返回的串行化之后的CodeGeneratorResponse数据进行反串行化，反串行化
+	// 成Message对象，实际上这里的Message::ParseFromString(const string&amp;)是个虚
+	// 函数，是被CodeGeneratorResponse这个类重写了的，反串行化过程与具体的类密切
+	// 相关，也必须在派生类中予以实现。
+	if (!output-&gt;ParseFromString(output_data)) {
+		*error = &quot;Plugin output is unparseable.&quot;;
+		return false;
+	}
+
+	return true;
+}
+
+</code></pre><p>到这里为止protoc进程的具体执行逻辑描述地已经很清楚了吧？下面再看下插件的执行逻辑。</p><p>支持不同语言的插件的执行逻辑，总体上来讲都包括下面的执行逻辑，只是生成的目标源代码不同而已。插件就只是从stdin读取串行化之后的CodeGeneratorRequest请求，然后执行反串行化得到一个完整的CodeGeneratorRequest对象，然后根据请求进行必要的代码生成逻辑，确定要生成的源代码信息，并将其设置到CodeGeneratorResponse中并串行化后写入到stdout，插件的执行逻辑就这么简单。</p><h3 id=2-protoc插件工作原理分析>2. protoc插件工作原理分析 <a href=#2-protoc%e6%8f%92%e4%bb%b6%e5%b7%a5%e4%bd%9c%e5%8e%9f%e7%90%86%e5%88%86%e6%9e%90 class=anchor aria-hidden=true>#</a><a href=#2-protoc插件工作原理分析 class=anchor aria-hidden=true>#</a></h3><p>在第1节中结合protoc源代码对protoc的工作原理进行了较为详细地介绍，也重点介绍了采用protoc插件生成源代码的情况下protoc与protoc插件的交互过程。下面我们将以protoc-gen-go作为一个学习的范例来进一步理解一下插件的工作原理，也可以为我们后续开发protoc插件提供参考。</p><h4 id=21-protoc-gen-go源代码准备>2.1. protoc-gen-go源代码准备 <a href=#21-protoc-gen-go%e6%ba%90%e4%bb%a3%e7%a0%81%e5%87%86%e5%a4%87 class=anchor aria-hidden=true>#</a><a href=#21-protoc-gen-go源代码准备 class=anchor aria-hidden=true>#</a></h4><p>protoc-gen-go的源代码可以通过通过如下方式获取：</p><pre><code class=language-c>git co https://github.com/golang/protobuf
+git branch -b ${new-branch}
+</code></pre><p>进行protoc插件开发，无非是基于解析后的proto文件生成特定语言（不一定是语言）的目标代码，要想正确地生成目标代码，首要条件就是要能够正确提取proto文件中的内容，而proto文件中定义的内容都可以通过descriptor.proto来描述。所以在我们深入protoc-gen-go的源代码之前，不妨先看下descriptor.proto的定义来看下protobuf是如何抽象、描述一个proto文件的。</p><h4 id=22-descriptorproto对proto文件的抽象描述>2.2. descriptor.proto，对proto文件的抽象&描述 <a href=#22-descriptorproto%e5%af%b9proto%e6%96%87%e4%bb%b6%e7%9a%84%e6%8a%bd%e8%b1%a1%e6%8f%8f%e8%bf%b0 class=anchor aria-hidden=true>#</a><a href=#22-descriptorproto对proto文件的抽象描述 class=anchor aria-hidden=true>#</a></h4><p>proto文件中的数据类型都是在descriptor.proto中定义好的，为了更好地帮助我们对proto文件中的数据类型进行解析，为了在插件开发过程中更加方便快速地获得与数据类型、变量、rpc等相关的相关内容，我们都需要深入地理解descriptor.proto中的相关定义以及从它延伸出来的一些概念、算法等。</p><p>这部分的内容还不少，在不影响理解的大前提下，我还是稍微删减了些代码，避免对大家理解造成不必要的干扰。</p><p>file: src/google/protobuf/descriptor.proto</p><pre><code class=language-c>// Author: kenton@google.com (Kenton Varda)
+// Based on original Protocol Buffers design by
+// Sanjay Ghemawat, Jeff Dean, and others.
+
+// descriptor.proto文件中的messages定义了proto文件中所能见到的所有的定义，一个有效的.proto文件在不提供其他信息（甚至不需要读取它的imports）能够直接被转换成一个FileDescriptorProto对象。
+
+package google.protobuf;
+option java_package = &quot;com.google.protobuf&quot;;
+option java_outer_classname = &quot;DescriptorProtos&quot;;
+
+// descriptor.proto必须在速度方面优化，因为在启动过程中基于反射的算法不起作用
+option optimize_for = SPEED;
+
+// protoc可以将解析的proto文件中的descriptor添加到FileDescriptorSet并输出到文件
+message FileDescriptorSet {
+	repeated FileDescriptorProto file = 1;
+}
+
+// 下面的message FileDescriptorProto可以用于描述一个完整的proto文件
+message FileDescriptorProto {
+
+	optional string name = 1;              // proto文件名，file name，相对于源代码根目录 
+	optional string package = 2;           // proto包名，例如 &quot;foo&quot;、&quot;foo.bar&quot;
+	repeated string dependency = 3;        // proto文件中import进来的其他proto文件列表
+	repeated int32 public_dependency = 10; // 上面public import的proto文件在proto文件列表中的索引
+
+	// Indexes of the weak imported files in the dependency list.
+	repeated int32 weak_dependency = 11;   // 上面weak import的proto文件在proto文件列表中的索引，不要使用，只用于google内部的迁移
+
+	// proto文件中的所有顶层定义信息
+	repeated DescriptorProto message_type = 4;    // 所有的消息(message)类型定义
+	repeated EnumDescriptorProto enum_type = 5;   // 所有的枚举(enum)类型定义
+	repeated ServiceDescriptorProto service = 6;  // 所有的服务(service)类型定义
+	repeated FieldDescriptorProto extension = 7;  // 所有的扩展字段定义
+
+	optional FileOptions options = 8;             // 文件选项
+
+	// 这个字段包括了源代码的相关信息，这里的信息可以给开发工具使用，也仅应该提供给开发工具使用；
+	// 可以选择将这个字段中的信息删除，在程序运行期间并不会造成破坏。
+	optional SourceCodeInfo source_code_info = 9;
+}
+
+// 描述消息类型Message
+message DescriptorProto {
+	optional string name = 1;                     // Message的类型名称
+
+	repeated FieldDescriptorProto field = 2;      // Message中包括的字段列表
+	repeated FieldDescriptorProto extension = 6;  // Message中包括的扩展列表
+
+	repeated DescriptorProto nested_type = 3;     // Message中嵌套的Message类型列表
+	repeated EnumDescriptorProto enum_type = 4;   // Message中嵌套的枚举类型列表
+
+	message ExtensionRange {
+	optional int32 start = 1;
+	optional int32 end = 2;
+	}
+	repeated ExtensionRange extension_range = 5;
+
+	optional MessageOptions options = 7;
+}
+
+// 描述一个字段（字段可以是Message中的，也可以是某些扩展字段）
+message FieldDescriptorProto {
+	// 字段数据类型
+	enum Type {
+		// 0 is reserved for errors.
+		// 由于历史方面的原因，这里的枚举值的顺序有点奇怪
+		TYPE_DOUBLE         = 1;
+		TYPE_FLOAT          = 2;
+		// Not ZigZag encoded.  Negative numbers take 10 bytes.  Use TYPE_SINT64 if
+		// negative values are likely.
+		TYPE_INT64          = 3;
+		TYPE_UINT64         = 4;
+		// Not ZigZag encoded.  Negative numbers take 10 bytes.  Use TYPE_SINT32 if
+		// negative values are likely.
+		TYPE_INT32          = 5;
+		TYPE_FIXED64        = 6;
+		TYPE_FIXED32        = 7;
+		TYPE_BOOL           = 8;
+		TYPE_STRING         = 9;
+		TYPE_GROUP          = 10;  // Tag-delimited aggregate.
+		TYPE_MESSAGE        = 11;  // Length-delimited aggregate.
+
+		// New in version 2.
+		TYPE_BYTES          = 12;
+		TYPE_UINT32         = 13;
+		TYPE_ENUM           = 14;
+		TYPE_SFIXED32       = 15;
+		TYPE_SFIXED64       = 16;
+		TYPE_SINT32         = 17;  // Uses ZigZag encoding.
+		TYPE_SINT64         = 18;  // Uses ZigZag encoding.
+	};
+
+	// 字段修饰符optional、required、repeated
+	enum Label {
+		// 0 is reserved for errors
+		LABEL_OPTIONAL      = 1;
+		LABEL_REQUIRED      = 2;
+		LABEL_REPEATED      = 3;
+		// TODO(sanjay): Should we add LABEL_MAP?
+	};
+
+	optional string name = 1;             // 字段名称
+	optional int32 number = 3;            // 字段tag编号
+	optional Label label = 4;             // 字段修饰符
+
+	// 如果type_name已设置，这个字段无须设置；
+	// 如果这两个字段都设置了，这里的type字段必须是TYPE_ENUM类型或者TYPE_MESSAGE类型
+	optional Type type = 5;
+
+	// 对于TYPE_ENUM或者TYPE_MESSAGE类型，type_name就是type的名字。
+	// 如果name以“.”开头那么它是完全保留的。对于C++来说，其作用域规则要求首先搜
+	// 索当前Message类型的嵌套类型，然后才是parent namespace中的类型，一直到root
+	// namespace。
+	optional string type_name = 6;
+
+	// 对于扩展，它就是被扩展的类型的名字，对它的解析与对type_name的解析时一样的
+	optional string extendee = 2;
+
+	// 对于数值类型，存储了数值的文本表示形式；
+	// 对于布尔类型，存储字符串&quot;true&quot;或&quot;false&quot;；
+	// 对于字符串类型，存储原始的文本内容（未转义的）
+	// 对于字节，存储了c转义后的值（所有&gt;=128的字节都会被转义）
+	// TODO(kenton)，基于base64编码的?
+	optional string default_value = 7;
+
+	optional FieldOptions options = 8;    // 字段选项
+}
+
+// 描述一个枚举类型enum
+message EnumDescriptorProto {
+	optional string name = 1;                     // 枚举类型名称
+	repeated EnumValueDescriptorProto value = 2;  // 枚举类型中包括的枚举值列表
+	optional EnumOptions options = 3;             // 枚举类型选项
+}
+
+// 描述一个枚举类型中的一个枚举值
+message EnumValueDescriptorProto {
+	optional string name = 1;                     // 枚举值对应的name
+	optional int32 number = 2;                    // 枚举值对应的number（默认为0，依次递增）
+	optional EnumValueOptions options = 3;        // 枚举值选项
+}
+
+// 描述一个rpc service.
+message ServiceDescriptorProto {
+	optional string name = 1;                     // 服务名称
+	repeated MethodDescriptorProto method = 2;    // 服务对应的方法列表
+	optional ServiceOptions options = 3;          // 服务选项
+}
+
+// 描述一个服务的方法
+message MethodDescriptorProto {
+	optional string name = 1;                     // 方法名称
+	optional string input_type = 2;               // 方法入参类型
+	optional string output_type = 3;              // 方法出参类型
+	optional MethodOptions options = 4;           // 方法选项
+}
+
+// ===================================================================
+// Options
+
+// 上面的每一个定义基本上都包括了选项option相关的字段，这些选项字段仅仅是一些
+// 注解，这些注解会影响代码的生成，使得生成的代码稍有不同，注解也可能包含了操作
+// message的代码的一些提示信息、说明信息。
+//
+// clients可能会定义一些自定义的选项来作为*Options message的extensions，这些
+// extensions在parsing阶段可能还无法确定下来，所以parser不能存储他们的值，而是
+// 将这些自定义的选项先存储到一个*Options message里面，称之为
+// uinterpreted_option。这个字段的名字在所有的*Options message里面都必须保证是
+// 相同的。之后在我们构建descriptor的时候，这个时候所有的proto文件也都解析完了、
+// 所有的extensions也都知道了，这个时候我们再用这里的uinterpreted_option字段去
+// 填充那些extensions。
+//
+// 用于自定义选项的extensions编号的选择一般遵循下面的方法：
+// * 对于只在一个应用程序或者组织内使用的选项，或者用于实验目的的选项，使用字
+//   段编号50000~99999范围内的。对于多个选项，用户需要确保不使用相同的编号。
+// * 对于可能被多个互不依赖的实体所共同使用的选项，需要给
+//   protobuf-global-extension-registry@google.com发邮件来申请预留扩展编号。需
+//   要提供工程名称、工程站点，没必要解释为什么需要申请预留某个特定的编号。通
+//   常只需要一个扩展编号，可以声明多个选项但是只使用这一个相同的扩展编号。如
+//   果申请公共的扩展编号是个刚需，google可能会发布一个web service接口来自动分
+//   配选项编号。
+
+message FileOptions {
+
+	// java包名，当前proto文件中生成的java类将位于这个package下
+	optional string java_package = 1;
+
+	// 指定一个外部类名称，当前proto文件中生成的所有的类将被封装在这个外部类当中
+	optional string java_outer_classname = 8;
+
+	// 如果设置为true，java代码生成器将为每个顶层message、enum、service定义生成
+	// 单独的java文件，默认为false
+	optional bool java_multiple_files = 10 [default=false];
+
+	// 如果设置为true，java代码生成器将未每个message定义生成equals()、hashCode()
+	// 方法，默认为false。本来AbstractMessage基类经包括了一个基于反射的equals()、
+	// hashCode()方法实现，这里的这个设置项是一个性能方面的优化
+	optional bool java_generate_equals_and_hash = 20 [default=false];
+
+	// 优化类型，生成的类可以进行速度优化、代码尺寸优化
+	enum OptimizeMode {
+		SPEED = 1;        // Generate complete code for parsing, serialization,
+						  // etc.
+		CODE_SIZE = 2;    // Use ReflectionOps to implement these methods.
+		LITE_RUNTIME = 3; // Generate code using MessageLite and the lite runtime.
+	}
+	optional OptimizeMode optimize_for = 9 [default=SPEED];
+
+	// 设置go代码的包名
+	optional string go_package = 11;
+
+	// 是否应该针对每一门语言都生成generice services？generic服务并不特定于任何
+	// 的rpc系统，它是由每个语言的注代码生成器来生成的，不借助于额外的插件。
+	// generic services是早期protoo2这个版本说支持的唯一一种服务类型。
+	//
+	// 由于现在推崇使用plugins，plugins可以生成针对特定rpc系统的代码，generic
+	// services现在可以看做是被废弃了。因此，以前proto2总的generice services的默
+	// 认设置默认为false，早期的依赖于generic services的代码需要显示设置这些选项
+	// 为true。
+	optional bool cc_generic_services = 16 [default=false];
+	optional bool java_generic_services = 17 [default=false];
+	optional bool py_generic_services = 18 [default=false];
+
+	// parser将不识别的选项存储在这里的uinterpreted_option
+	repeated UninterpretedOption uninterpreted_option = 999;
+
+	// 用户可以定义自定义选项来扩展当前Message
+	extensions 1000 to max;
+}
+
+message MessageOptions {
+	// 设为true则使用老的proto1 MessageSet wire format……兼容性目的，没必要使用
+	optional bool message_set_wire_format = 1 [default=false];
+
+	// 禁用标准的descriptor()方法的生成，因为如果有个字段名是descriptor的话会生
+	// 成一个同名的函数，会冲突。这使得从proto1迁移到后续版本更简单，但是新版本
+	// 中还是应该避免使用字段descriptor。
+	optional bool no_standard_descriptor_accessor = 2 [default=false];
+
+	// parser将不识别的选项存储在这个字段里
+	repeated UninterpretedOption uninterpreted_option = 999;
+
+	// 用户可以定义自定义选项来扩展当前Message
+	extensions 1000 to max;
+}
+
+message FieldOptions {
+	// 开启packed选项之后，对于repeated基本数据类型字段的表示会更加高效。不再针
+	// 对repeated字段中的各个元素执行写tag、类型操作，而是将整个数组作为一个固定
+	// 长度的blob来存储。
+	optional bool packed = 2;
+
+	// 当前字段是否需要lazy parsing？只是建议，lazy为true，protoc不一定lazy parsing
+	optional bool lazy = 5 [default=false];
+
+	// 当前字段是否已经被废弃，跟目标平台相关，这个字段可以为生成的accessor方法
+	// 生成Deprecated注解，如果目标平台不支持就会忽略这个选项。不管目标平台是否
+	// 支持，proto里面要想废弃一个字段加deprecated选项还是非常正确的做法。
+	optional bool deprecated = 3 [default=false];
+
+	// map字段，目前还未完全实现，应避免使用
+	optional string experimental_map_key = 9;
+
+	// google内部迁移使用，因避免使用
+	optional bool weak = 10 [default=false];
+
+	// 用户可以定义自定义选项来扩展当前Message
+	repeated UninterpretedOption uninterpreted_option = 999;
+
+	// 用户自定义选项来扩展message
+	extensions 1000 to max;
+}
+
+message EnumOptions {
+
+	// 不允许将多个不同的tag names映射到一个相同的值
+	// - 意思是说不允许多个字段的编号相同
+	optional bool allow_alias = 2 [default=true];
+
+	// 用户可以定义自定义选项来扩展当前Message
+	repeated UninterpretedOption uninterpreted_option = 999;
+
+	// 用户自定义选项来扩展message
+	extensions 1000 to max;
+}
+
+message EnumValueOptions {
+	// 用户可以定义自定义选项来扩展当前Message
+	repeated UninterpretedOption uninterpreted_option = 999;
+
+	// 用户自定义选项来扩展message
+	extensions 1000 to max;
+}
+
+message ServiceOptions {
+	// 用户可以定义自定义选项来扩展当前Message
+	repeated UninterpretedOption uninterpreted_option = 999;
+
+	// 用户自定义选项来扩展message
+	extensions 1000 to max;
+}
+
+message MethodOptions {
+
+	// 注意：字段编号1~32被保留给google内部rpc框架使用，google的解释是，在
+	// protobuf被公开给外部使用之前内部就已经大量使用了，且1~32倍使用的很多，也
+	// 是不得已的事情，总不能为了开源、推广一个内部组件就把自己的生意砸了吧。
+
+	// 用户可以定义自定义选项来扩展当前Message
+	repeated UninterpretedOption uninterpreted_option = 999;
+
+	// 用户自定义选项来扩展message
+	extensions 1000 to max;
+}
+
+// 描述一个parser不认识的option message
+// - UninterpretedOption只会出现在compiler::Parser类创建的options protos中；
+// - 构建Descriptor对象的时候DescriptorPool会解析UninterpretedOptions；
+// 因此，descriptor对象中的options protos（通过Descriptor::options()返回，或者
+// 通过Descriptor::CopyTo()生成）是不会包括UinterpretedOptions的。
+message UninterpretedOption {
+	// uinterpreted选项的名字，name中每个元素的name_part字段都表示name中的点分字
+	// 符串的一段，如果name_part是一个扩展（通过在字符串两端用括号括起来表示），
+	// is_extension字段为true。
+	// 例如，{[&quot;foo&quot;, false], [&quot;bar.baz&quot;,true], [&quot;qux&quot;,false]}表示&quot;foo.(bar.baz).qux&quot;。
+	message NamePart {
+		required string name_part = 1;
+		required bool is_extension = 2;
+	}
+	repeated NamePart name = 2;
+
+	// uinterpreted选项的值，会设置下面字段中其中一个的值
+	optional string identifier_value = 3;
+	optional uint64 positive_int_value = 4;
+	optional int64 negative_int_value = 5;
+	optional double double_value = 6;
+	optional bytes string_value = 7;
+	optional string aggregate_value = 8;
+}
+
+// ===================================================================
+// Optional source code info
+
+// FileDescriptorProto是从之前的source file中生成的（source file指的是proto文
+// 件），这里的SourceCodeInfo指的是proto中的“源代码”信息。
+message SourceCodeInfo {
+	// Location用于识别proto文件中的源代码片段，往往对应着一个特定的定义。这些
+	// Location信息对于IDE、代码索引工具、文档生成工具等是非常重要的。
+	//
+	// 下面说明一下Location的概念和作用，以下面这个message为例：
+	//   message Foo {
+	//     optional string foo = 1;
+	//   }
+	// 我们先只看上面这个message中的字段定义：
+	//   optional string foo = 1;
+	//   ^       ^^     ^^  ^  ^^^
+	//   a       bc     de  f  ghi
+	// 我们可以得到下面这几个Location：
+	//   span   path               represents
+	//   [a,i)  [ 4, 0, 2, 0 ]     The whole field definition.
+	//   [a,b)  [ 4, 0, 2, 0, 4 ]  The label (optional).
+	//   [c,d)  [ 4, 0, 2, 0, 5 ]  The type (string).
+	//   [e,f)  [ 4, 0, 2, 0, 1 ]  The name (foo).
+	//   [g,h)  [ 4, 0, 2, 0, 3 ]  The number (1).
+	//
+	// 每个proto文件解析之后用一个FileDescriptorProto来表示，所以Lcoation路径位
+	// 置从FileDescriptorProto开始。
+	// - 因为message Foo是一个message，proto中所有顶层message类型定义都在
+	//   FileDescriptorProto中message_type字段存储，这个字段的tag是4，所以Location为[4]；
+	// - 又因为message_type是repeated DescriptorProto类型，因为当前proto示例中
+	//   Foo为第一个message，所以其在message_type列表中的索引值为0，所以Location为[4,0]；
+	// - 因为我们现在看的“源代码”是“optional string foo = 1;”，我们需要定位到
+	//   message中的字段位置，message Foo中的所有字段都在DescriptorProto中的field字
+	//   段中记录，这个字段的tag=2，所以Location变为[4,0,2]；
+	// - 又因为这个DescriptorProto中的field为repeated FieldDescriptorProto field，
+	//   因为这个message中只有一个字段foo，所以foo在field列表中的索引值为0，Location变为[4,0,2,0];
+	// 上面解释了定位到完整的“optional string foo = 1”定义这个field的Location变
+	// 化过程，下面再说一下label、type、name、number的Location如何进一步确定。
+	// FieldDescriptorProto中label的tag位4，type的tag为5，name的tag为1，number的
+	// tag为3，Location对应的追加索引4、5、1、3。gg!
+	//
+	// proto文件中的源代码信息就是由一系列的Location来寻址的。
+	repeated Location location = 1;
+	message Location {
+		// 前面已经描述了Location的确定过程，一个Location如[4,0,2,0]其中的数字要么
+		// 是字段的tag编号要么是repeated列表中的索引值，这里的数字构成的数组保存在
+		// path中。
+		repeated int32 path = 1 [packed=true];
+
+		// 该字段span总是包括3个或者4个元素，依次表示startline、startcolumn、endline、endcolumn
+		repeated int32 span = 2 [packed=true];
+
+		// 如果这个SourceCodeInfo代表一个完整的声明的话，可能在这个声明的前面或者
+		// 后面可能有一些attached的注释。
+		//
+		// 连续的多个行注释看做是一个单独的注释。
+		//
+		// 这个字段只记录了注释内容，不包括注释内容开头的注释符号//。对于块注释，
+		// 注释前面的空白字符、*这几种符号也会被清理掉。但是会包括换行符。
+		//
+		// Examples:
+		//
+		//   optional int32 foo = 1;  // Comment attached to foo.
+		//   // Comment attached to bar.
+		//   optional int32 bar = 2;
+		//
+		//   optional string baz = 3;
+		//   // Comment attached to baz.
+		//   // Another line attached to baz.
+		//
+		//   // Comment attached to qux.
+		//   //
+		//   // Another line attached to qux.
+		//   optional double qux = 4;
+		//
+		//   optional string corge = 5;
+		//   /* Block comment attached
+		//    * to corge.  Leading asterisks
+		//    * will be removed. */
+		//   /* Block comment attached to
+		//    * grault. */
+		//   optional int32 grault = 6;
+
+		// Location前面的注释信息
+		optional string leading_comments = 3;
+
+		// Location后面的注释信息
+		optional string trailing_comments = 4;
+	}
+}
+</code></pre><h4 id=23-可以提取proto文件中的哪些信息--如何提取>2.3. 可以提取proto文件中的哪些信息 & 如何提取 <a href=#23-%e5%8f%af%e4%bb%a5%e6%8f%90%e5%8f%96proto%e6%96%87%e4%bb%b6%e4%b8%ad%e7%9a%84%e5%93%aa%e4%ba%9b%e4%bf%a1%e6%81%af--%e5%a6%82%e4%bd%95%e6%8f%90%e5%8f%96 class=anchor aria-hidden=true>#</a><a href=#23-可以提取proto文件中的哪些信息--如何提取 class=anchor aria-hidden=true>#</a></h4><p>前一节2.2中对descriptor.proto进行了详细地描述，可以说在proto文件中写的每一行内容都可以通过解析FileDescriptorProto来访问到。proto文件只是一种自描述的消息格式，基于这种格式生成面向特定编程语言的源代码文件时，我们想获取的信息不外乎如下几个：</p><ol><li>待生成的源文件的包名；</li><li>待生成的源文件的wrapper class类名；</li><li>proto文件中定义的各个类型，包括枚举enum、消息message、服务service；</li><li>对于枚举enum需要知道枚举类型名、列出的枚举值（包括字段、值、注释信息）、注释信息；</li><li>对于消息message需要知道类型名、类成员（包括成员类型、成员名称、定义顺序、默认值、注释信息）、注释信息；</li><li>对于服务service需要知道服务名称、服务rpc接口（rpc接口的请求参数、返回值类型、注释信息）、注释信息；</li><li>proto中可以添加注解吗？注解可以提取出来吗？</li></ol><p>如何提取上述信息呢？可以肯定地是，只要能拿到当前proto文件对应的FileDescriptorProto，上述内容几乎都可以获取到。但是如何获取到对应的proto文件对应的这个FileDescriptorProto对象呢？下面我们先来看一个protoc-gen-go这个插件的示例代码吧，看完之后，大家也就了解了如何获取proto对应的FileDescriptorProto以及如何从中提取想要的上述1~7部分的信息，生成源代码文件也就简单了。</p><h4 id=24-proto-gen-go源代码分析>2.4. proto-gen-go源代码分析 <a href=#24-proto-gen-go%e6%ba%90%e4%bb%a3%e7%a0%81%e5%88%86%e6%9e%90 class=anchor aria-hidden=true>#</a><a href=#24-proto-gen-go源代码分析 class=anchor aria-hidden=true>#</a></h4><h4 id=241-protoc-gen-go入口函数>2.4.1. protoc-gen-go入口函数 <a href=#241-protoc-gen-go%e5%85%a5%e5%8f%a3%e5%87%bd%e6%95%b0 class=anchor aria-hidden=true>#</a><a href=#241-protoc-gen-go入口函数 class=anchor aria-hidden=true>#</a></h4><p>file: protobuf/protoc-gen-go/main.go</p><pre><code class=language-go>package main
+
+import (
+	&quot;io/ioutil&quot;
+	&quot;os&quot;
+
+	&quot;github.com/c4pt0r/proto&quot;
+	&quot;github.com/c4pt0r/protoc-gen-go/generator&quot;
+)
+
+func main() {
+	// 首先创建一个代码生成器generator，CodeGeneratorRequest、CodeGeneratorResponse
+	// 结构体都被保存在generator中，CodeGenerateResponse中保存着代码生成过程中
+	// 的错误状态信息，因此我们可以通过这个结构体提取错误状态并进行错误处理
+	g := generator.New()
+
+	// 从标准输入中读取CodeGeneratorRequest信息（标准输入已经被重定向到了父进程
+	// protoc进程创建的管道stdout_pipe的读端，父进程会从管道的写端写入该请求信息）
+	data, err := ioutil.ReadAll(os.Stdin)
+	if err != nil {
+		g.Error(err, &quot;reading input&quot;)
+	}
+
+	// 读取到的数据时串行化之后的CodeGeneratorRequest，将其反串行化成CodeGeneratorRequest
+	if err := proto.Unmarshal(data, g.Request); err != nil {
+		g.Error(err, &quot;parsing input proto&quot;)
+	}
+
+	// 检查CodeGeneratorRequest中待生成的源代码文件数量，数量为0则无需生成
+	if len(g.Request.FileToGenerate) == 0 {
+		g.Fail(&quot;no files to generate&quot;)
+	}
+
+	// 将CodeGeneratorRequest中传递给代码生成器的参数设置到protoc插件的代码生成器中
+	g.CommandLineParameters(g.Request.GetParameter())
+
+	// 前面的proto.Unmarshal(...)操作将stdin中的请求反串行化成了CodeGeneratorRequest，
+	// 这里的g.WrapTypes()将请求中的一些descriptors进行进一步封装，方便后面引用
+	g.WrapTypes()
+
+	g.SetPackageNames()
+	g.BuildTypeNameMap()
+
+	// 生成所有的源代码文件
+	g.GenerateAllFiles()
+
+	// 将CodeGeneratorResponse对象进行串行化处理
+	data, err = proto.Marshal(g.Response)
+	if err != nil {
+		g.Error(err, &quot;failed to marshal output proto&quot;)
+	}
+	// 将串行化之后的CodeGenerateResponse对象数据写入标准输出（标准输出已经被
+	// 重定向到了父进程protoc进程创建的管道stdin_pipe的写端，父进程从管道的读
+	// 端读取这里的响应）
+	_, err = os.Stdout.Write(data)
+	if err != nil {
+		g.Error(err, &quot;failed to write output proto&quot;)
+	}
+}
+</code></pre><h4 id=242-回顾一下codegeneratorrequest--codegeneratorresponse的定义>2.4.2. 回顾一下CodeGeneratorRequest & CodeGeneratorResponse的定义 <a href=#242-%e5%9b%9e%e9%a1%be%e4%b8%80%e4%b8%8bcodegeneratorrequest--codegeneratorresponse%e7%9a%84%e5%ae%9a%e4%b9%89 class=anchor aria-hidden=true>#</a><a href=#242-回顾一下codegeneratorrequest--codegeneratorresponse的定义 class=anchor aria-hidden=true>#</a></h4><p>下面看下CodeGeneratorRequest和CodeGeneratorResponse的定义。</p><p>file: ${protobuf}/src/google/protobuf/compiler/plugin.go</p><pre><code class=language-go>// 串行化后的CodeGeneratorRequest信息会被写入到插件程序的stdin
+message CodeGeneratorRequest {
+	// protoc命令执行时，我们在命令行中列出了需要进行处理的.proto文件的名称，代
+	// 码生成器应该只为这些.proto文件生成源代码文件。每一个.proto文件成功解析之
+	// 后会生成一个FileDescriptorProto对象，这个对象会被加入到字段proto_file中
+	repeated string file_to_generate = 1;
+
+	// protoc命令行程序中传递给插件程序代码生成器的参数信息
+	optional string parameter = 2;
+
+	// protoc命令行中列出的所有的.proto文件被添加到了字段file_to_generate中，这
+	// 些.proto文件中通过import引入进来的文件，这两部分文件解析成功后对应的
+	// FileDescriptorProto对象都会被加入到这里的proto_file中，添加后的顺序是按照
+	// 拓扑顺序排序的，怎么讲？就是被import的proto文件会出现在import它们的 proto
+	// 文件前面。
+	repeated FileDescriptorProto proto_file = 15;
+}
+
+// 串行化后的CodeGeneratorResponse信息会被写入到插件的stdout
+message CodeGeneratorResponse {
+	// 如果错误信息非空，表示代码生成失败。这种情况下尽管代码生成失败，插件进程
+	// 仍然应该返回一个状态0。
+	//
+	// 这个字段用于指示.proto文件错误，.proto文件中的错误将使得代码生成器无法生
+	// 成正确的代码。指示protoc本身的错误，例如CodeGeneratorRequest数据无法被正
+	// 确地反串行化，这种情况应该被报告，错误信息应该写到stderr并且插件进程应该
+	// 返回一个非0状态码
+	optional string error = 1;
+
+	// 描述一个待生成的源代码文件
+	message File {
+	// 待生成的源代码文件相对于输出目录的文件名
+	optional string name = 1;
+
+	// 写入到源代码文件中的插入点信息，方便后面的插件在插入点处进行扩展其他内容
+	optional string insertion_point = 2;
+
+	// 写入到文件或者文件插入点位置的内容
+	optional string content = 15;
+	}
+
+	// 所有的待生成的源代码文件列表
+	repeated File file = 15;
+}
+</code></pre><h4 id=243-proto-gen-go-generator实现分析>2.4.3. proto-gen-go generator实现分析 <a href=#243-proto-gen-go-generator%e5%ae%9e%e7%8e%b0%e5%88%86%e6%9e%90 class=anchor aria-hidden=true>#</a><a href=#243-proto-gen-go-generator实现分析 class=anchor aria-hidden=true>#</a></h4><p>main.go中调用了generator的几个关键方法，我们先来看下这几个方法都做了些什么，然
+后再跟进一步看看generator的详细实现过程。</p><h5 id=2431-generatornew>2.4.3.1. generator.New() <a href=#2431-generatornew class=anchor aria-hidden=true>#</a><a href=#2431-generatornew class=anchor aria-hidden=true>#</a></h5><p>file: ${golang-protobuf}/protoc-gen-go/generator/generator.go</p><pre><code class=language-go>// Generator类型的方法能够输出源代码，这些输出的源代码信息存储在Response成员中
+type Generator struct {
+	*bytes.Buffer
+
+	Request  *plugin.CodeGeneratorRequest  // The input.
+	Response *plugin.CodeGeneratorResponse // The output.
+
+	Param             map[string]string // Command-line parameters.
+	PackageImportPath string            // Go import path of the package we're generating code for
+	ImportPrefix      string            // String to prefix to imported package file names.
+	ImportMap         map[string]string // Mapping from .proto file name to import path
+
+	Pkg map[string]string // The names under which we import support packages
+
+	packageName      string                     // What we're calling ourselves.
+	allFiles         []*FileDescriptor          // All files in the tree
+	allFilesByName   map[string]*FileDescriptor // All files by filename.
+	genFiles         []*FileDescriptor          // Those files we will generate output for.
+	file             *FileDescriptor            // The file we are compiling now.
+	usedPackages     map[string]bool            // Names of packages used in current file.
+	typeNameToObject map[string]Object          // Key is a fully-qualified name in input syntax.
+	init             []string                   // Lines to emit in the init function.
+	indent           string
+	writeOutput      bool
+}
+
+// 创建一个新的代码生成器，并创建请求、响应对象
+func New() *Generator {
+	g := new(Generator)
+	g.Buffer = new(bytes.Buffer)
+	g.Request = new(plugin.CodeGeneratorRequest)
+	g.Response = new(plugin.CodeGeneratorResponse)
+	return g
+}
+</code></pre><h5 id=2432-generatorcommandlineparameters>2.4.3.2. generator.CommandLineParameters(&mldr;) <a href=#2432-generatorcommandlineparameters class=anchor aria-hidden=true>#</a><a href=#2432-generatorcommandlineparameters class=anchor aria-hidden=true>#</a></h5><p>这个函数是负责解析protoc传递过来的命令行参数信息的。</p><p>file: ${golang-protobuf}/protoc-gen-go/generator/generator.go</p><pre><code class=language-go>// 将都好分隔的key=value列表解析成&lt;key,value&gt; map
+func (g *Generator) CommandLineParameters(parameter string) {
+	g.Param = make(map[string]string)
+	for _, p := range strings.Split(parameter, &quot;,&quot;) {
+		if i := strings.Index(p, &quot;=&quot;); i &lt; 0 {
+			g.Param[p] = &quot;&quot;
+		} else {
+			g.Param[p[0:i]] = p[i+1:]
+		}
+	}
+
+	g.ImportMap = make(map[string]string)
+	pluginList := &quot;none&quot; // Default list of plugin names to enable (empty means all).
+	for k, v := range g.Param {
+		switch k {
+		case &quot;import_prefix&quot;:
+			g.ImportPrefix = v
+		case &quot;import_path&quot;:
+			g.PackageImportPath = v
+		// --go_out=plugins=grpc:.，解析这里的参数plugins=grpc
+		case &quot;plugins&quot;:
+			pluginList = v
+		default:
+			if len(k) &gt; 0 &amp;&amp; k[0] == 'M' {
+				g.ImportMap[k[1:]] = v
+			}
+		}
+	}
+
+	// 在protoc-gen-go的某个地方已经将grpc插件注册到了当前generator（也就是添
+	// 加到plugins []Plugin中），但是到底是在哪里注册的呢？只有注册并激活（参
+	// 数中通过--go_out=plugins=grpc:.)grpc子插件，该子插件才能被使用于后续的
+	// 代码生成过程中（生成rpc相关的go源代码）。
+	//
+	// 其实这里的grpc子插件注册是利用了link_grpc.go里面的import _操作来隐式地
+	// 调用了grpc.init()方法，该初始化方法中负责完成向generator的注册操作，即
+	// generator.RegisterPlugin(new(grpc))，这里的RegisterPlugin其实就是将指定
+	// 的子插件加入到plugins []Plugin slice中。
+	// 为了能够在protoc-gen-go中正确地将grpc link进去，在构建protoc-gen-go的时
+	// 候需要执行命令：
+	// cd protoc-gen-go &amp; go build main.go link_grpc.go
+	// go build的时候如果没有列出link_grpc.go，那么grpc是不会被link进
+	// protoc-gen-go这个插件的，这样处理.proto文件中的service时插件是不会生成
+	// service相关的go源代码的。
+
+	// 根据--go_out=plugins=?+?+?:.，更新激活的插件列表
+	if pluginList != &quot;&quot; {
+		// Amend the set of plugins.
+		enabled := make(map[string]bool)
+		for _, name := range strings.Split(pluginList, &quot;+&quot;) {
+			enabled[name] = true
+		}
+		var nplugins []Plugin
+		for _, p := range plugins {
+			if enabled[p.Name()] {
+				nplugins = append(nplugins, p)
+			}
+		}
+		plugins = nplugins
+	}
+}
+</code></pre><h5 id=2433-generatorwraptypes>2.4.3.3. generator.WrapTypes() <a href=#2433-generatorwraptypes class=anchor aria-hidden=true>#</a><a href=#2433-generatorwraptypes class=anchor aria-hidden=true>#</a></h5><p>file: ${golang-protobuf}/protoc-gen-go/generator/generator.go</p><pre><code class=language-go>// WrapTypes walks the incoming data, wrapping DescriptorProtos, EnumDescriptorProtos
+// and FileDescriptorProtos into file-referenced objects within the Generator.
+// It also creates the list of files to generate and so should be called before GenerateAllFiles.
+func (g *Generator) WrapTypes() {
+    g.allFiles = make([]*FileDescriptor, 0, len(g.Request.ProtoFile))
+    g.allFilesByName = make(map[string]*FileDescriptor, len(g.allFiles))
+    for _, f := range g.Request.ProtoFile {
+        // We must wrap the descriptors before we wrap the enums
+        descs := wrapDescriptors(f)
+        g.buildNestedDescriptors(descs)
+        enums := wrapEnumDescriptors(f, descs)
+        g.buildNestedEnums(descs, enums)
+        exts := wrapExtensions(f)
+        fd := &amp;FileDescriptor{
+            FileDescriptorProto: f,
+            desc:                descs,
+            enum:                enums,
+            ext:                 exts,
+            exported:            make(map[Object][]symbol),
+            proto3:              fileIsProto3(f),
+        }
+        extractComments(fd)
+        g.allFiles = append(g.allFiles, fd)
+        g.allFilesByName[f.GetName()] = fd
+    }
+    for _, fd := range g.allFiles {
+        fd.imp = wrapImported(fd.FileDescriptorProto, g)
+    }
+
+    g.genFiles = make([]*FileDescriptor, 0, len(g.Request.FileToGenerate))
+    for _, fileName := range g.Request.FileToGenerate {
+        fd := g.allFilesByName[fileName]
+        if fd == nil {
+            g.Fail(&quot;could not find file named&quot;, fileName)
+        }
+        fd.index = len(g.genFiles)
+        g.genFiles = append(g.genFiles, fd)
+    }
+}
+
+</code></pre><h5 id=2434-generatorgenerateallfiles>2.4.3.4. generator.GenerateAllFiles() <a href=#2434-generatorgenerateallfiles class=anchor aria-hidden=true>#</a><a href=#2434-generatorgenerateallfiles class=anchor aria-hidden=true>#</a></h5><p>调用generator针对所有解析成功的proto文件生成所有的go源代码</p><p>file: ${golang-protobuf}/protoc-gen-go/generator/generator.go</p><pre><code class=language-go>// 生成所有.proto文件对应的go源代码，这里只是将源代码内容存储到g.Response中，
+// 并没有直接创建源代码文件，插件将Response传递给protoc进程后由protoc进程来负
+// 责创建源代码文件
+func (g *Generator) GenerateAllFiles() {
+    // Initialize the plugins
+    for _, p := range plugins {
+        p.Init(g)
+    }
+    // Generate the output. The generator runs for every file, even the files
+    // that we don't generate output for, so that we can collate the full list
+    // of exported symbols to support public imports.
+    genFileMap := make(map[*FileDescriptor]bool, len(g.genFiles))
+    for _, file := range g.genFiles {
+        genFileMap[file] = true
+    }
+    for _, file := range g.allFiles {
+        g.Reset()
+        g.writeOutput = genFileMap[file]
+
+        // 调用generator的generate(...)方法来生成该proto文件的
+        // FileDescriptorProto描述对应的go源代码
+        g.generate(file)
+
+        if !g.writeOutput {
+            continue
+        }
+        g.Response.File = append(g.Response.File, &amp;plugin.CodeGeneratorResponse_File{
+            Name:    proto.String(file.goFileName()),
+            Content: proto.String(g.String()),
+        })
+    }
+}
+</code></pre><p>再看下generator.generate(&mldr;)方法是如何实现的。</p><pre><code class=language-go>// 针对.proto文件（由FileDescriptor表示）生成对应的go源代码
+func (g *Generator) generate(file *FileDescriptor) {
+    g.file = g.FileOf(file.FileDescriptorProto)
+    g.usedPackages = make(map[string]bool)
+
+    // 要生成源代码的首个proto文件对应的go源代码，这部分代码顶部插入版权信息
+    if g.file.index == 0 {
+        // For one file in the package, assert version compatibility.
+        g.P(&quot;// This is a compile-time assertion to ensure that this generated file&quot;)
+        g.P(&quot;// is compatible with the proto package it is being compiled against.&quot;)
+        g.P(&quot;// A compilation error at this line likely means your copy of the&quot;)
+        g.P(&quot;// proto package needs to be updated.&quot;)
+        g.P(&quot;const _ = &quot;, g.Pkg[&quot;proto&quot;], &quot;.ProtoPackageIsVersion&quot;, generatedCodeVersion, &quot; // please upgrade the proto package&quot;)
+        g.P()
+    }
+
+    // 生成import语句
+    for _, td := range g.file.imp {
+        g.generateImported(td)
+    }
+    // 生成enum类型定义语句
+    for _, enum := range g.file.enum {
+        g.generateEnum(enum)
+    }
+    // 生成message类型定义语句
+    for _, desc := range g.file.desc {
+        // Don't generate virtual messages for maps.
+        if desc.GetOptions().GetMapEntry() {
+            continue
+        }
+        g.generateMessage(desc)
+    }
+    // 生成extension类型定义语句
+    for _, ext := range g.file.ext {
+        g.generateExtension(ext)
+    }
+    // 生成初始化函数语句
+    g.generateInitFunction()
+
+    // 前面生成enum、message、extension等的方式都基本类似，后面我们只给出一个
+    // 生成枚举类型方法的说明，生成message、extension的实现方法可以执行查看
+    // generator.go中的实现。
+    // 
+    // 需要注意的是，前面的各个生成源代码的方法不能处理service服务定义的rpc接
+    // 口代码，这部分rpc代码的生成需要借助于grpc子插件来完成，即下面的g.runPlugins(...)
+    g.runPlugins(file)
+
+    g.generateFileDescriptor(file)
+
+    // 待输出的源代码需要知道哪些package是需要import的，哪些不需要，因此先运行
+    // 插件生成go代码中除import之外的其他部分代码，然后知道了哪些package需要
+    // import，再插入具体的import语句。
+    //
+    // 最后在go源代码中插入header、import
+    rem := g.Buffer
+    g.Buffer = new(bytes.Buffer)
+    g.generateHeader()
+    g.generateImports()
+    if !g.writeOutput {
+        return
+    }
+    g.Write(rem.Bytes())
+
+    // 重新格式化生成的go源代码（gofmt）
+    fset := token.NewFileSet()
+    raw := g.Bytes()
+    ast, err := parser.ParseFile(fset, &quot;&quot;, g, parser.ParseComments)
+    if err != nil {
+        // Print out the bad code with line numbers.
+        // This should never happen in practice, but it can while changing generated code,
+        // so consider this a debugging aid.
+        var src bytes.Buffer
+        s := bufio.NewScanner(bytes.NewReader(raw))
+        for line := 1; s.Scan(); line++ {
+            fmt.Fprintf(&amp;src, &quot;%5d\t%s\n&quot;, line, s.Bytes())
+        }
+        g.Fail(&quot;bad Go source code was generated:&quot;, err.Error(), &quot;\n&quot;+src.String())
+    }
+    g.Reset()
+    err = (&amp;printer.Config{Mode: printer.TabIndent | printer.UseSpaces, Tabwidth: 8}).Fprint(g, fset, ast)
+    if err != nil {
+        g.Fail(&quot;generated Go source code could not be reformatted:&quot;, err.Error())
+    }
+}
+
+</code></pre><p>上面generate.generate(&mldr;)方法中generateEnum()、generateMessage()方法与其他几个方法都是非常类似的，由于大家使用protobuf过程中使用enum、message比较多，并且generateEnum()、generateMessage()方法执行逻辑非常相似，考虑到篇幅方面generateEnum()比generateMessage()简短，这里我们就只以generateEnum()的源代码作为示例进行分析。相信如果看懂了generateEnum的实现思路，generateMessage的实现思路也很容易搞明白，读者也具备了自己实现子插件的能力。</p><pre><code class=language-go>// 生成指定enum类型的go源代码
+func (g *Generator) generateEnum(enum *EnumDescriptor) {
+    // enum类型的完整类型名
+    typeName := enum.TypeName()
+    // CamelCased之后的完整类型名
+    ccTypeName := CamelCaseSlice(typeName)
+    ccPrefix := enum.prefix()
+
+    // 打印enum类型定义之前的leading comments
+    // - 提取源代码信息SourceCodeInfo都是通过Location path来获取的；
+    // - 提取注释信息也不例外，下面我们会介绍PrintComments(path)如何通过
+    //   Location path来生成注释信息；
+    g.PrintComments(enum.path)
+
+    // 生成枚举类型的定义起始部分：type 枚举类型名 int32
+    g.P(&quot;type &quot;, ccTypeName, &quot; int32&quot;)
+    g.file.addExport(enum, enumSymbol{ccTypeName, enum.proto3()})
+
+    // 枚举类型里面的各个枚举值都作为const int32常量来定义
+    g.P(&quot;const (&quot;)
+
+    // 枚举值定义之前缩进一下
+    g.In()
+
+    // 针对枚举类型里面的所有枚举值进行源代码生成
+    for i, e := range enum.Value {
+        // 生成枚举值前面的leading comments
+        g.PrintComments(fmt.Sprintf(&quot;%s,%d,%d&quot;, enum.path, enumValuePath, i))
+        // 生成枚举值的name = value形式的go源代码
+        name := ccPrefix + *e.Name
+        g.P(name, &quot; &quot;, ccTypeName, &quot; = &quot;, e.Number)
+        g.file.addExport(enum, constOrVarSymbol{name, &quot;const&quot;, ccTypeName})
+    }
+
+    // 枚举值定义完之后取消缩进
+    g.Out()
+
+    // 打印最后的结束信息
+    g.P(&quot;)&quot;)
+
+    // 生成枚举类型相关的两个map
+    // - 其中一个是枚举值到枚举名的映射；
+    // - 另一个是枚举名到枚举值的映射；
+    g.P(&quot;var &quot;, ccTypeName, &quot;_name = map[int32]string{&quot;)
+    g.In()
+    // 第一个map
+    generated := make(map[int32]bool) // avoid duplicate values
+    for _, e := range enum.Value {
+        duplicate := &quot;&quot;
+        if _, present := generated[*e.Number]; present {
+            duplicate = &quot;// Duplicate value: &quot;
+        }
+        g.P(duplicate, e.Number, &quot;: &quot;, strconv.Quote(*e.Name), &quot;,&quot;)
+        generated[*e.Number] = true
+    }
+    g.Out()
+    g.P(&quot;}&quot;)
+    // 第二个map
+    g.P(&quot;var &quot;, ccTypeName, &quot;_value = map[string]int32{&quot;)
+    g.In()
+    for _, e := range enum.Value {
+        g.P(strconv.Quote(*e.Name), &quot;: &quot;, e.Number, &quot;,&quot;)
+    }
+    g.Out()
+    g.P(&quot;}&quot;)
+
+    // 其他处理动作，也会生成部分源代码，这里可以忽略不计了
+    // ...
+}
+</code></pre><p>下面看一下PrintComments如何通过Location path来提取并打印关联的注释信息。</p><pre><code class=language-go>// 打印.proto文件中对该location path关联的leading comments注释信息
+func (g *Generator) PrintComments(path string) bool {
+    if !g.writeOutput {
+        return false
+    }
+
+    // 在protoc进程解析.proto文件的时候就已经将各个类型、字段的comments信息维
+    // 护起来了，k就是location的path，通过path就能获取到对应的location，每个
+    // location中保存了这个位置的源代码的leading comments、trailing comments信
+    // 息，这里只打印leading comments
+    if loc, ok := g.file.comments[path]; ok {
+        text := strings.TrimSuffix(loc.GetLeadingComments(), &quot;\n&quot;)
+        for _, line := range strings.Split(text, &quot;\n&quot;) {
+            g.P(&quot;// &quot;, strings.TrimPrefix(line, &quot; &quot;))
+        }
+        return true
+    }
+
+    return false
+}
+</code></pre><p>看到这里我们对于基本的enum、message类型定义等都基本清楚了，下面我们需要看一下grpc子插件是如何生成service服务的rpc接口源代码的，这样的话，就得再来看一下g.runPlugins(file)是如何实现的。</p><pre><code class=language-go>// Run all the plugins associated with the file.
+func (g *Generator) runPlugins(file *FileDescriptor) {
+    // 在上述generator处理的基础上，继续运行generator中注册的插件，依次运行插件
+    for _, p := range plugins {
+        p.Generate(file)
+    }
+}
+</code></pre><h4 id=244-protoc-gen-go-grpc子插件实现>2.4.4. protoc-gen-go grpc子插件实现 <a href=#244-protoc-gen-go-grpc%e5%ad%90%e6%8f%92%e4%bb%b6%e5%ae%9e%e7%8e%b0 class=anchor aria-hidden=true>#</a><a href=#244-protoc-gen-go-grpc子插件实现 class=anchor aria-hidden=true>#</a></h4><p>因为上述2.4.3.4节中runPlugins(&mldr;)的执行过程中，plugins这个slice内只有一个有效的、激活的子插件grpc，因此如果我们想了解service服务对应的rpc接口源代码是如何生成的话，查看一下grpc这个插件的Generate(file)方法就可以了。</p><pre><code class=language-go>// 生成.proto文件中service定义的rpc接口的go源代码
+func (g *grpc) Generate(file *generator.FileDescriptor) {
+
+    // 如果没有定义service服务直接返回
+    if len(file.FileDescriptorProto.Service) == 0 {
+        return
+    }
+
+    // 相关变量定义
+    g.P(&quot;// Reference imports to suppress errors if they are not otherwise used.&quot;)
+    g.P(&quot;var _ &quot;, contextPkg, &quot;.Context&quot;)
+    g.P(&quot;var _ &quot;, grpcPkg, &quot;.ClientConn&quot;)
+    g.P()
+
+    // 断言，检查版本兼容性
+    g.P(&quot;// This is a compile-time assertion to ensure that this generated file&quot;)
+    g.P(&quot;// is compatible with the grpc package it is being compiled against.&quot;)
+    g.P(&quot;const _ = &quot;, grpcPkg, &quot;.SupportPackageIsVersion&quot;, generatedCodeVersion)
+    g.P()
+
+    // 针对所有的service定义生成相关的service的go源代码
+    for i, service := range file.FileDescriptorProto.Service {
+        g.generateService(file, service, i)
+    }
+}
+
+// grpc中对generateService的实现，生成service相关的go源代码
+// @param .proto解析后的各种DescriptorProto的wrapping类，通过它可以方便地访问.proto中定义的东西 
+// @param .proto中的某个service解析后对应的ServiceDescriptorProto
+// @param .proto中可能定义了多个service，当前这个service对应的索引值
+func (g *grpc) generateService(file *generator.FileDescriptor, service *pb.ServiceDescriptorProto, index int) {
+    // 构建当前service对应的path!
+    path := fmt.Sprintf(&quot;6,%d&quot;, index) // 6 means service.
+
+    // 获取service名称
+    origServName := service.GetName()
+    fullServName := origServName
+    if pkg := file.GetPackage(); pkg != &quot;&quot; {
+        fullServName = pkg + &quot;.&quot; + fullServName
+    }
+    servName := generator.CamelCase(origServName)
+
+    // 准备生成client相关的go源代码
+    g.P()
+    g.P(&quot;// Client API for &quot;, servName, &quot; service&quot;)
+    g.P()
+
+    // 服务用户端go源代码生成
+    // - type 服务名+Client interface
+    g.P(&quot;type &quot;, servName, &quot;Client interface {&quot;)
+    // - 服务用户端定义的各个接口方法
+    for i, method := range service.Method {
+
+        // 打印接口的leading comments
+        g.gen.PrintComments(fmt.Sprintf(&quot;%s,2,%d&quot;, path, i)) // 2 means method in a service.
+        // 生成接口的签名
+        g.P(g.generateClientSignature(servName, method))
+    }
+    g.P(&quot;}&quot;)
+    g.P()
+
+    // 服务的用户端struct，其中包括了一个cc *grpc.ClientConn，后面会在该struct
+    // 上实现上述服务接口
+    g.P(&quot;type &quot;, unexport(servName), &quot;Client struct {&quot;)
+    g.P(&quot;cc *&quot;, grpcPkg, &quot;.ClientConn&quot;)
+    g.P(&quot;}&quot;)
+    g.P()
+
+    // NewClient工厂 
+    g.P(&quot;func New&quot;, servName, &quot;Client (cc *&quot;, grpcPkg, &quot;.ClientConn) &quot;, servName, &quot;Client {&quot;)
+    g.P(&quot;return &amp;&quot;, unexport(servName), &quot;Client{cc}&quot;)
+    g.P(&quot;}&quot;)
+    g.P()
+
+    var methodIndex, streamIndex int
+    serviceDescVar := &quot;_&quot; + servName + &quot;_serviceDesc&quot;
+
+    // 服务用户端的接口方法实现
+    for _, method := range service.Method {
+        var descExpr string
+        if !method.GetServerStreaming() &amp;&amp; !method.GetClientStreaming() {
+            // Unary RPC method
+            descExpr = fmt.Sprintf(&quot;&amp;%s.Methods[%d]&quot;, serviceDescVar, methodIndex)
+            methodIndex++
+        } else {
+            // Streaming RPC method
+            descExpr = fmt.Sprintf(&quot;&amp;%s.Streams[%d]&quot;, serviceDescVar, streamIndex)
+            streamIndex++
+        }
+        g.generateClientMethod(servName, fullServName, serviceDescVar, method, descExpr)
+    }
+
+    g.P(&quot;// Server API for &quot;, servName, &quot; service&quot;)
+    g.P()
+
+    // 服务端接口go源代码生成
+    ...
+}
+</code></pre><p>到这里为止，已经描述了protoc-gen-go中的generator做了哪些工作，与之协作的grpc又做了什么，一句话概括就是：generator负责生成除service之外的其他go代码，grpc负责生成service相关的go代码。在描述protoc-gen-go实现的过程中我们也描述了哪些信息该从哪里提取，比如定义的message类型、enum类型、service及其注释等信息。相信看到这里，读者应该可以独立开发一个protoc插件了吧。</p><h2 id=3-总结>3. 总结 <a href=#3-%e6%80%bb%e7%bb%93 class=anchor aria-hidden=true>#</a><a href=#3-总结 class=anchor aria-hidden=true>#</a></h2><p>本文结合protoc源代码、protoc-gen-go源代码，对protoc、protoc插件工作原理进行了较为详细的分析、总结，希望能对想了解这方面内容或者有意向开发protoc插件扩展protoc功能的读者有帮助。</p><p>由于本人水平有限，可能有理解不到位甚至错误的地方，也欢迎大家指出来。</p><div class=edit-page><a href=https://github.com/hitzhangjie/myspace/blob/master/content/blog/2017-05-23-Protoc%e5%8f%8a%e6%8f%92%e4%bb%b6%e5%b7%a5%e4%bd%9c%e5%8e%9f%e7%90%86%e5%88%86%e6%9e%90%28%e7%b2%be%e5%8d%8e%e7%89%88%29.md><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentcolor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-edit-2"><path d="M17 3a2.828 2.828.0 114 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>Edit this page on GitHub</a></div><div class="docs-navigation d-flex justify-content-between"><a href=/blog/2017-10-14-assembly-language/><div class="card my-1"><div class="card-body py-2">&larr; Assembly Language</div></div></a><a class=ms-auto href=/blog/2017-05-16-protoc%E5%B7%A5%E4%BD%9C%E5%8E%9F%E7%90%86/><div class="card my-1"><div class="card-body py-2">Protoc工作原理分析 &rarr;</div></div></a></div></main></div></div></div><footer class="footer text-muted"><div class=container-xxl><div class=row><div class="col-lg-8 order-last order-lg-first"><ul class=list-inline><li class=list-inline-item>Powered by <a class=text-muted href=https://www.netlify.com/>Netlify</a>, <a class=text-muted href=https://gohugo.io/>Hugo</a>, and <a class=text-muted href=https://getdoks.org/>Doks</a></li></ul></div><div class="col-lg-8 order-first order-lg-last text-lg-end"><ul class=list-inline></ul></div><div class=col-lg-8 align=right><p><font size=-1>站点构建版本：v</font></p></div></div></div></footer><script src=/js/bootstrap.min.fdbe9b9ba88a036135318f3c721784d684ac9e3280fe282cc80d7d49f7f9c82780cd54228c1608685a230c09984300d7946fc471734d566fcebc148b65bd16db.js integrity="sha512-/b6bm6iKA2E1MY88cheE1oSsnjKA/igsyA19Sff5yCeAzVQijBYIaFojDAmYQwDXlG/EcXNNVm/OvBSLZb0W2w==" crossorigin=anonymous defer></script>
+<script src=/js/highlight.min.451fe6185924dcedf55c767559b5130f666f31c989f0078a75bafc346ad7364e180edfd731b1ca6bae0e90dfee88842885d284126ab0879f5067399e3a02b09e.js integrity="sha512-RR/mGFkk3O31XHZ1WbUTD2ZvMcmJ8AeKdbr8NGrXNk4YDt/XMbHKa64OkN/uiIQohdKEEmqwh59QZzmeOgKwng==" crossorigin=anonymous defer></script>
+<script src=/main.min.f16ffd9b364013a1df84be9cd7a45c470cb48639766bf5551e05bba845fe4ab150cb6436de43609bfed9af47c23bd5e395e9a10b932fa6fb2c4ee8f6cc78d7a3.js integrity="sha512-8W/9mzZAE6HfhL6c16RcRwy0hjl2a/VVHgW7qEX+SrFQy2Q23kNgm/7Zr0fCO9XjlemhC5MvpvssTuj2zHjXow==" crossorigin=anonymous defer></script>
+<script src=/index.min.4f5da6d5d5039814b7640914dc6d7af9b1826b54a2e8027123e345920f33e3dab6f98ed3b275444c8e3ce3de9faa12475d34fad04a0140d0a99b28e75bc5267c.js integrity="sha512-T12m1dUDmBS3ZAkU3G16+bGCa1Si6AJxI+NFkg8z49q2+Y7TsnVETI48496fqhJHXTT60EoBQNCpmyjnW8UmfA==" crossorigin=anonymous defer></script></body></html>

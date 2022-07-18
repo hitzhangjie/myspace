@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>runtime on</title><link>/tags/runtime/</link><description>Recent content in runtime on</description><generator>Hugo -- gohugo.io</generator><language>en-US</language><lastBuildDate>Sun, 06 Jun 2021 10:17:34 +0800</lastBuildDate><atom:link href="/tags/runtime/index.xml" rel="self" type="application/rss+xml"/><item><title>syscall：how does go runtime handles syscall</title><link>/blog/2021-06-06-how-go-handles-syscall/</link><pubDate>Sun, 06 Jun 2021 10:17:34 +0800</pubDate><guid>/blog/2021-06-06-how-go-handles-syscall/</guid><description>1 How go runtime handle syscall ? # 最近遇到个线上服务频繁陷入系统调用导致go运行时创建了大量线程，影响到了服务质量，定位、解决问题之后，希望能进一步探究go运行时处理系统调用的过程，以便加深理解。参考了不少网友的分享，特别是知乎Golang Inernal专栏，结合个人的学习理解在此整理记录一下，与大家分享。
+1.1 前言 # 在开始结合源码进行分析之前，先做下简单的介绍，方便先从整体上把握go对系统调用的处理过程，然后从第二部分开始，再结合源码介绍具体的细节。
+系统调用分为阻塞系统调用、非阻塞系统调用，go里面对这些系统调用有归类整理，详见源文件：/src/syscall/syscall_linux_amd64.go。
+如下图所示，sys开头的表示的是阻塞系统调用，会调用Syscall，以sysnb开头的是非阻塞系统调用，会调用RawSyscall，关于Syscall和RawSyscall的区别下面整理。阻塞型的系统调用本身会阻塞线程，为了避免线程阻塞导致协程不可调度，golang运行时要感知这样的系统调用并做特殊处理，非阻塞的系统调用直接调即可，不需要golang运行时参与。 Syscall定义在asm_linux_amd64.s里面，代码中有runtime.entersyscall(SB)和runtime.exitsyscall(SB)函数调用，这个是与golang运行时进行交互的，用于通知golang运行时我即将发起或者退出一个系统调用。
+对于会导致阻塞的系统调用，都要通过Syscall来调用来通知golang运行时，以便golang运行时做处理，如创建新的物理线程调度器其它的goroutine，避免整个进程无线程可调度而最终被sysmon杀死进程。 对于某些非阻塞的系统调用，就不必再与golang运行时交互了，直接调用就可以，这样可以减少两次与golang运行时交互的函数调用开销，这里就掉的是RawSyscall： 网络io操作本来也是阻塞的，但是因为socket fd会被设置为non-blocking，系统调用虽然还是阻塞的系统调用，但是已经不会阻塞调用线程了，所以也无所谓了。
+有个脚本mksyscall.pl根据syscall_linux_amd64.go里面定义的系通调用列表，就是第一张图那些带注释的部分，这个pl脚本会负责生成与之相关的系统调用函数，生成在syscall/zsyscall_linux_amd64.go里面。可以找几个有代表性的来看下生成的系统调用函数：
+比如sendfile是阻塞的系统调用： 比如settimeofday是非阻塞的系统调用： epoll相关的epollwait也是阻塞的，但是网络socket fd在go里面都统一设置为了nonblocking fd处理了，因此并不会阻塞。 1.2 开始分析源码 # 在讲述系统调用发生的协程调度之前，让我们看看go是如何进入系统调用的，理解了这个让我们不会对后面所说的一些东西感到很陌生。
+golang对操作系统的系统调用作了封装，提供了syscall这样的库让我们执行系统调用。例如，Read系统调用实现如下：
+func Read(fd int, p []byte) (n int, err error) { n, err = read(fd, p) if raceenabled { if n &amp;gt; 0 { ...... } ...... } return } // 最终封装了Syscall func read(fd int, p []byte) (n int, err error) { var _p0 unsafe.</description></item><item><title>how goroutine created and started</title><link>/blog/2021-05-24-how-goroutine-created-and-started/</link><pubDate>Mon, 24 May 2021 00:14:01 +0800</pubDate><guid>/blog/2021-05-24-how-goroutine-created-and-started/</guid><description>goroutine创建：runtime.newproc(siz int32, fn *funcval)
+go fn()，传递给fn的参数实际上是紧跟着存在fn压栈后的地址后面，在newproc1的栈帧里面，但是不出现在签名参数列表中，因为这些参数类型、数量不一样，也无法出现在签名参数列表中； newproc1创建g； getg().m.p.ptr()拿到当前p； runqput将当前g放入p的local queue中，如果满则放到global queue中； g等待被调度器调度执行； 大致创建执行goroutine的逻辑是这样的，下面的逻辑都是切到系统栈上去执行的。
+1 newproc1逻辑
+查看源码发现，goroutine初始创建时对函数参数大小是有限制的，如果参数占内存空间很大，比如超过初始栈帧大小2KB，那么goroutine创建会失败：&amp;ldquo;fatal error: newproc: function arguments too large for new goroutine&amp;rdquo;，比如，go func(a [1024]int) {}([1024]int{})。
+每个p内部都有一个空闲goroutine队列gFree，这个就是用来执行fn的goroutine，是可以复用的，不用的时候可以丢给调度器schedt.gFree供其他p复用。这里空闲的goroutines，一部分存在于p.gFree，如果gfput(p, gp)时发现p.gFree队列太长说明过剩了，就转移一部分到调度器schedt.gFree中供其他p复用。
+goroutine执行完毕后运行时并不急于将其销毁，而是会考虑goroutine的复用，gfput，前面提过了。希望go func()通过协程执行时，也不必每次创建新的goroutine，gfget，可以复用p.gFree中的goroutine，如果p.gFree空或者过少（32）且调度器schedt.gFree中有空闲，则转移一部分过来给p复用。但是goroutine的栈有可能会被销毁，如果复用到栈被销毁的goroutine就需要stackalloc重新为其分配新栈帧。
+如果没有空闲的g可供复用，那就只能malg从头新建一个goroutine了。
+goroutine创建成功、栈空间也ok了之后，就要把goroutine要执行的函数对应的函数参数给拷贝到这个栈空间里面来，通过memmove(spArg, argp, uintptr(narg))来完成。完成后调整newg的调度上下文相关的寄存器值，等调度器调度它时，还原其中的上下文信息，pc就指向其对应的函数地址了，对应的数据也会指向其对应的栈空间。
+然后，通过gostartcallfn→gostartcall(buf, fn, ctxt)，之前已经拷贝了函数fn的参数到goroutine栈空间了，这里面再继续在栈内设置fn返回地址、gobuf.sp+gobuf.pc信息。
+上述调整完成之后，将goroutine的状态从_Gdead调整为_Grunnable，等待调度器调度。新创建的时候其状态是_Gidle，一定会将其调整为_Gdead然后再进行上述准备工作，一切就绪后才调整为_Grunnable让其参与调度。
+2 runqput(p, gp, next) 这里的逻辑是，希望将gp放到p的local queue中，但是也有头插、尾插两种方式。
+如果next为true，可以认为是头插，其实是放到p.runnext中，比p.queue中的得到优先调度。如果之前p.runnext有值，还要该值对应的g放入p.queue中； 如果next为false，则尝试将其放置到p.queue中，这里也有快慢两种情况，快的情况就是，因为p.queue这个本地队列长度最大为256，如果有空余位置放入就返回，这是快的情况。慢的情况就是如果p.queue满了就要先转移1/2到调度器全局队列schedt.queue中，然后再放入，这个过程就慢一些。 放置过程中，如果p.runqueue满了怎么办，将其放置到调度器schedt.queue这个全局队列中。
+3 wakeup()逻辑
+这个函数内部执行startm(p, spinning)，来找一个m来执行goroutine，具体是怎么做的呢？
+如果没有指定p，比如新建goroutine时，此时会尝试检查有没有空闲的p，没有的话就直接返回了，相当于当前一次没有执行成功，那么只能下次调度的时候再执行这个新建的goroutine了；
+现在有空闲的p，我们还缺什么，m！然后mget找一个空闲的m，如果没有空闲的，就newm创建一个新的，本质上是通过clone系统调用创建的新的线程。然后将这个m和这个p关联起来，m.nextp = p。值得一提的是clone出来的线程对应的线程处理函数是mstart，mstart使用汇编写的，内部实际调用的是mstart0，它内部又请求mstart1，获取当前g：
+如果g.m==&amp;amp;m0，则执行mstartm0完成信号处理注册，继续执行其他；
+获取当前m.</description></item></channel></rss>

@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>go on</title><link>/tags/go/</link><description>Recent content in go on</description><generator>Hugo -- gohugo.io</generator><language>en-US</language><lastBuildDate>Wed, 23 Jun 2021 00:44:00 +0800</lastBuildDate><atom:link href="/tags/go/index.xml" rel="self" type="application/rss+xml"/><item><title>go设计实现系列文集</title><link>/blog/2021-06-23-go%E8%AE%BE%E8%AE%A1%E5%AE%9E%E7%8E%B0%E7%B3%BB%E5%88%97%E6%96%87%E9%9B%86/</link><pubDate>Wed, 23 Jun 2021 00:44:00 +0800</pubDate><guid>/blog/2021-06-23-go%E8%AE%BE%E8%AE%A1%E5%AE%9E%E7%8E%B0%E7%B3%BB%E5%88%97%E6%96%87%E9%9B%86/</guid><description>陆续看过一些go语言设计实现的文章，编译器、运行时调度、内存管理、垃圾回收、race检测、AST、locks等等吧，相对来说比较系统。收藏的这些文章，描述都比较形象、简单易懂，和动辄分析大篇幅的源码来说，对初学者或者希望利用碎片化时间学习的同学来说，会比较友好一点……就分享一下吧。</description></item><item><title>go map设计实现及应用选型</title><link>/blog/2021-06-15-go-map%E8%AE%BE%E8%AE%A1%E5%AE%9E%E7%8E%B0%E5%8F%8A%E5%BA%94%E7%94%A8%E9%80%89%E5%9E%8B/</link><pubDate>Tue, 15 Jun 2021 15:52:11 +0800</pubDate><guid>/blog/2021-06-15-go-map%E8%AE%BE%E8%AE%A1%E5%AE%9E%E7%8E%B0%E5%8F%8A%E5%BA%94%E7%94%A8%E9%80%89%E5%9E%8B/</guid><description>map大致实现 # buckets &amp;amp; overflow # 本文介绍了map的内部数据结构，每个桶8个kvpairs，超过了可以用溢出桶，但是溢出桶会降低map性能，所以会创建新的bucket将数据迁到新bucket里面。
+hash &amp;amp; top hash table # 一个kvpairs存储在哪个bucket里面呢，首先根据key计算hash，然后对buckets数量取余，再放到对应桶里面，如果有空位置就放入，没有就需要走前面提到的溢出桶的逻辑。
+根据key计算出的hash除了计算key分布在哪个桶，还有其他用途，每个桶里都有一个top hash构成的数组，是为了map访问时加快查询key所在的数组索引的，通过减少比较key的耗时来加速访问。
+mapaccess_faststr, mapaccess_fast64&amp;hellip;访问map中元素时，根据key类型不同编译器插入不同的函数调用，函数名后缀表示key的类型，为什么有不同的函数呢？这是为了提高key的hash计算效率和比较效率。
+load factor # 装填因子，是用来控制map装填的元素数量，即元素数量除以桶数量。装填因子过小容易浪费内存空间，过大容易引发更多的碰撞冲突导致性能下降。
+initialization &amp;amp;&amp;amp; lazy initialization # map提前初始化再赋值，比lazy初始化后再赋值效率高，为什么呢？lazy初始化桶是后面创建的更花时间。但是lazy初始化相比较而言容易节省内存。
+kvpairs padding # map中kvpairs的存储有考虑内存占用方面的优化，key的类型和value的类型可能不同，所以在数据对齐过程中padding会浪费不少内存，所以go map中的keys和values是分开存储的，先存储keys再存储values。
+并发安全检测 # map中的并发读写问题，go提供了如下方式进行检查：
+data race detection：通过选项-race来检测是否存在data race，关于data race检测的问题，kavya joshi的分享里有介绍；
+concurrent map writes：map对应的数据结构hmap中有个字段flags来记录当前的map操作，比如当前执行m[1]=1，是一个kv的赋值，对应的函数是mapassign_fast64，如果执行的是delete(m, 1)，对应的函数是mapdelete_fast64，这里的map修改操作对应的函数内部会将hmap.flags^=hashWriting，如果已经有一个写操作在执行，后面又有一个写操作执行，后面的写操作就有很大概率检测到flags的hashWriting位被设置了，此时就会抛出错误“concurrent map writes”错误；
+关于map为什么不直接提供并发安全的版本，原因也简单。并发安全的版本是有同步开销的，但是很多时候并不需要并发安全的版本，如果默认实现是并发安全的，性能上就要大打折扣了。不考虑并发安全问题的话，map比sync.Map要快7~10倍。
+并发安全实现 # sync.Map是并发安全的实现，它对某些场景下的并发读写做了性能方面的优化：
+&amp;ldquo;The Map type is optimized for two common use cases: (1) when the entry for a given key is only ever written once but read many times, as in caches that only grow, (2) when multiple goroutines read, write and overwrite entries for disjoint sets of keys.</description></item><item><title>syscall：how does go runtime handles syscall</title><link>/blog/2021-06-06-how-go-handles-syscall/</link><pubDate>Sun, 06 Jun 2021 10:17:34 +0800</pubDate><guid>/blog/2021-06-06-how-go-handles-syscall/</guid><description>1 How go runtime handle syscall ? # 最近遇到个线上服务频繁陷入系统调用导致go运行时创建了大量线程，影响到了服务质量，定位、解决问题之后，希望能进一步探究go运行时处理系统调用的过程，以便加深理解。参考了不少网友的分享，特别是知乎Golang Inernal专栏，结合个人的学习理解在此整理记录一下，与大家分享。
+1.1 前言 # 在开始结合源码进行分析之前，先做下简单的介绍，方便先从整体上把握go对系统调用的处理过程，然后从第二部分开始，再结合源码介绍具体的细节。
+系统调用分为阻塞系统调用、非阻塞系统调用，go里面对这些系统调用有归类整理，详见源文件：/src/syscall/syscall_linux_amd64.go。
+如下图所示，sys开头的表示的是阻塞系统调用，会调用Syscall，以sysnb开头的是非阻塞系统调用，会调用RawSyscall，关于Syscall和RawSyscall的区别下面整理。阻塞型的系统调用本身会阻塞线程，为了避免线程阻塞导致协程不可调度，golang运行时要感知这样的系统调用并做特殊处理，非阻塞的系统调用直接调即可，不需要golang运行时参与。 Syscall定义在asm_linux_amd64.s里面，代码中有runtime.entersyscall(SB)和runtime.exitsyscall(SB)函数调用，这个是与golang运行时进行交互的，用于通知golang运行时我即将发起或者退出一个系统调用。
+对于会导致阻塞的系统调用，都要通过Syscall来调用来通知golang运行时，以便golang运行时做处理，如创建新的物理线程调度器其它的goroutine，避免整个进程无线程可调度而最终被sysmon杀死进程。 对于某些非阻塞的系统调用，就不必再与golang运行时交互了，直接调用就可以，这样可以减少两次与golang运行时交互的函数调用开销，这里就掉的是RawSyscall： 网络io操作本来也是阻塞的，但是因为socket fd会被设置为non-blocking，系统调用虽然还是阻塞的系统调用，但是已经不会阻塞调用线程了，所以也无所谓了。
+有个脚本mksyscall.pl根据syscall_linux_amd64.go里面定义的系通调用列表，就是第一张图那些带注释的部分，这个pl脚本会负责生成与之相关的系统调用函数，生成在syscall/zsyscall_linux_amd64.go里面。可以找几个有代表性的来看下生成的系统调用函数：
+比如sendfile是阻塞的系统调用： 比如settimeofday是非阻塞的系统调用： epoll相关的epollwait也是阻塞的，但是网络socket fd在go里面都统一设置为了nonblocking fd处理了，因此并不会阻塞。 1.2 开始分析源码 # 在讲述系统调用发生的协程调度之前，让我们看看go是如何进入系统调用的，理解了这个让我们不会对后面所说的一些东西感到很陌生。
+golang对操作系统的系统调用作了封装，提供了syscall这样的库让我们执行系统调用。例如，Read系统调用实现如下：
+func Read(fd int, p []byte) (n int, err error) { n, err = read(fd, p) if raceenabled { if n &amp;gt; 0 { ...... } ...... } return } // 最终封装了Syscall func read(fd int, p []byte) (n int, err error) { var _p0 unsafe.</description></item><item><title>go抢占式调度</title><link>/blog/2021-05-25-go%E6%8A%A2%E5%8D%A0%E5%BC%8F%E8%B0%83%E5%BA%A6/</link><pubDate>Tue, 25 May 2021 13:13:52 +0800</pubDate><guid>/blog/2021-05-25-go%E6%8A%A2%E5%8D%A0%E5%BC%8F%E8%B0%83%E5%BA%A6/</guid><description>SIGURG，在信号处理函数runtime/signal_unix.go:sighandler(&amp;hellip;)函数中又看到对sigPreempt的处理。
+SIGURG实现抢占式调度： 对应这个函数doSigPreempt，检查当前g是不是wantAsyncPreempt，ok的话检查是不是isAsyncSafePoint，ok的话，sigctxt.pushCall(funcPC(asyncPreempt), newpc)，这个函数调整PC并注入一个对asyncPreempt的调用。
+TODO wantAsyncPreempt对应的判断参数是谁去设置的，什么时候设置的？
+TODO isAsyncSafePoint，safepoint的含义？这个函数的注释以及代码中的if-else已经足够结实清楚什么是safepoint了，以及safepoint的意义了。
+看下asyncPreempt的逻辑，该函数是在汇编中实现的，首先保存寄存器的值，然后调用asyncPreempt2执行其他处理。
+g.preemptStop决定是挂起g还是重新调度g：
+如果被抢占的g的g.preemptStop为true，则执行mcall(preemptPark)挂起该g，g的状态被改为preempted，后面什么时机会重新调度它吧。然后执行schedule调度其他goroutine执行； 如果g.preemptStop为false，则mcall(gopreempt_m)将g从running改为runnable重新调度一次。 大致的抢占式调度逻辑就是这样的。
+ps: func mcall(fn func(*g))，mcall switches from the g to the g0 stack and invokes fn(g), where g is the goroutine that made the call.</description></item><item><title>go程序信号处理过程</title><link>/blog/2021-05-25-go%E7%A8%8B%E5%BA%8F%E4%BF%A1%E5%8F%B7%E5%A4%84%E7%90%86%E8%BF%87%E7%A8%8B/</link><pubDate>Tue, 25 May 2021 11:32:39 +0800</pubDate><guid>/blog/2021-05-25-go%E7%A8%8B%E5%BA%8F%E4%BF%A1%E5%8F%B7%E5%A4%84%E7%90%86%E8%BF%87%E7%A8%8B/</guid><description>go信号处理基础 # go os.signal package对信号处理做了封装，其中信号SIGKILL、SIGSTOP是操作系统规定的不允许捕获的信号，是不受os.signal这个package影响的
+go中将信号分为两类：同步信号和异步信号。
+同步信号：指的是go程序运行时程序内部错误触发的一些问题，如SIGBUS、SIGFPE、SIGSEGV，这些信号会被转换成运行时panic信息；
+异步信号：除了上述提及的信号之外的信号，就是异步信号了。异步信号不是程序内部错误导致的，而是由操作系统或者外部其他程序发送给它的。
+有哪些异步信号？ # 当程序失去对控制终端的控制时，会收到SIGHUP信号； 在控制终端中输入Ctrl+C时会收到SIGINT信号； 在控制终端中输入Ctrl+\时会受到SIGQUIT信号； ps：通常想让程序退出的话，Ctrl+C就可以了，如果想让程序退出同时打印栈转储信息，那就用Ctrl+\。
+默认的信号处理方式？ # 接收到信号之后，肯定有默认的处理方式，这个在学习linux信号处理时肯定有了解过的，在go程序中可能只是默认处理方式有点不同，这个有需要的时候去了解就可以了。这里不展开了。
+值得一提的是信号SIGPROF，这个信号用于实现runtime.CPUProfile。
+自定义信号处理方式？ # 自定义信号处理方式，在linux signal函数中可以指定信号及对应对应的处理函数，go中类似，它允许通过os.Notify指定一个或多个信号chan，里面可以注册感兴趣的信号，当收到这些信号时，就可以执行用户自定义的信号处理逻辑。
+SIGPIPE信号处理 # 当程序write broken pipe时，会收到SIGPIPE信号，比如写网络连接失败，如果不做处理默认崩溃掉那就完蛋了。go程序中对这个做了优化处理。
+write broken pipe的行为与write的file descriptor的fd有关系：
+如果fd是stdout、stderr，那么程序收到SIGPIPE信号，默认行为是程序会退出； 如果是其他fd，程序收到SIGPIPE信号，默认行为是不采取任何动作，对应的write操作返回一个EPIPE错误； ps：后者很重要，写网络连接失败是常有的事情，linux c程序如果不显示处理SIGPIPE信号，默认行为将是程序直接crash，go程序对此作了优化，让write返回error而非crash，对于go将构建高性能、稳定健壮的网络程序的初衷来说是有必要的。
+cgo程序信号处理？ # 涉及到cgo就要分几种情况来讨论，这里会有点麻烦了，涉及到信号处理函数的重复注册、信号掩码设置、信号处理函数的栈等问题，在os/signal/doc.go里面有这方面的描述，这里不赘述。
+go信号处理过程 # 介绍了go程序内部的信号处理过程。GMP调度模型里面，每个M都有一个独立的gsignal goroutine，系统投递信号给进程时实际上是有gsignal goroutine来接受这个信号，然后检查下是否可处理。如果可处理就将其push到一个信号队列中，然后有一个专门的goroutine执行signal.loop，这个函数从上述信号队列中取信号，并转移到用户自定义的chan os.Signal中，再由我们自己写的chan read代码消费，并执行处理。
+对应到源码中主要有几个函数：
+对应到源码中主要有几个函数：
+os/signal/signal.go：这个函数里面在func init()的时候有启动一个loop函数，这个函数内调用runtime.signal_recv来不停地接收信号，然后检查程序通过os.Notify为哪些chan os.Signal订阅了该信号，就将该信号push到对应的chan中，后面应用程序就可以自行处理了；
+runtime/sigqueue.go：runtime.sigsend、runtime.signal_recv这两个函数很重要，前者是程序收到系统发送来的信号时将信号写入outgoing sigqueue中，其实就是sig结构体的mask字段，后面signal_recv的时候也是从该mask字段读取，并写入recv字段中，recv中非0的应该就是表示收到了信号（信号编号为索引值）；
+runtime/signal_unix.go：有个函数sighandler，这个函数负责对不同的信号执行不同的处理，比如抢占式调度SIGURG的处理，比如SIGPROF的处理，比如我们这里讨论的一些异步信号的处理sigsend。在go程序中不管是什么信号，这些信号是在sighandler做不同处理。sighandler虽然名字是信号处理函数，我们也看到了通过setsig将所有信号全部设置sighandler为信号处理函数，但是其实这只是表现。setsig函数内部又做了一个转换，将信号的信号处理函数设置为了sigtramp活着cgosigtramp，这些函数内部又调用sighandler。下面会提到sigtramp的逻辑；
+runtime/runtime2.</description></item><item><title>how goroutine created and started</title><link>/blog/2021-05-24-how-goroutine-created-and-started/</link><pubDate>Mon, 24 May 2021 00:14:01 +0800</pubDate><guid>/blog/2021-05-24-how-goroutine-created-and-started/</guid><description>goroutine创建：runtime.newproc(siz int32, fn *funcval)
+go fn()，传递给fn的参数实际上是紧跟着存在fn压栈后的地址后面，在newproc1的栈帧里面，但是不出现在签名参数列表中，因为这些参数类型、数量不一样，也无法出现在签名参数列表中； newproc1创建g； getg().m.p.ptr()拿到当前p； runqput将当前g放入p的local queue中，如果满则放到global queue中； g等待被调度器调度执行； 大致创建执行goroutine的逻辑是这样的，下面的逻辑都是切到系统栈上去执行的。
+1 newproc1逻辑
+查看源码发现，goroutine初始创建时对函数参数大小是有限制的，如果参数占内存空间很大，比如超过初始栈帧大小2KB，那么goroutine创建会失败：&amp;ldquo;fatal error: newproc: function arguments too large for new goroutine&amp;rdquo;，比如，go func(a [1024]int) {}([1024]int{})。
+每个p内部都有一个空闲goroutine队列gFree，这个就是用来执行fn的goroutine，是可以复用的，不用的时候可以丢给调度器schedt.gFree供其他p复用。这里空闲的goroutines，一部分存在于p.gFree，如果gfput(p, gp)时发现p.gFree队列太长说明过剩了，就转移一部分到调度器schedt.gFree中供其他p复用。
+goroutine执行完毕后运行时并不急于将其销毁，而是会考虑goroutine的复用，gfput，前面提过了。希望go func()通过协程执行时，也不必每次创建新的goroutine，gfget，可以复用p.gFree中的goroutine，如果p.gFree空或者过少（32）且调度器schedt.gFree中有空闲，则转移一部分过来给p复用。但是goroutine的栈有可能会被销毁，如果复用到栈被销毁的goroutine就需要stackalloc重新为其分配新栈帧。
+如果没有空闲的g可供复用，那就只能malg从头新建一个goroutine了。
+goroutine创建成功、栈空间也ok了之后，就要把goroutine要执行的函数对应的函数参数给拷贝到这个栈空间里面来，通过memmove(spArg, argp, uintptr(narg))来完成。完成后调整newg的调度上下文相关的寄存器值，等调度器调度它时，还原其中的上下文信息，pc就指向其对应的函数地址了，对应的数据也会指向其对应的栈空间。
+然后，通过gostartcallfn→gostartcall(buf, fn, ctxt)，之前已经拷贝了函数fn的参数到goroutine栈空间了，这里面再继续在栈内设置fn返回地址、gobuf.sp+gobuf.pc信息。
+上述调整完成之后，将goroutine的状态从_Gdead调整为_Grunnable，等待调度器调度。新创建的时候其状态是_Gidle，一定会将其调整为_Gdead然后再进行上述准备工作，一切就绪后才调整为_Grunnable让其参与调度。
+2 runqput(p, gp, next) 这里的逻辑是，希望将gp放到p的local queue中，但是也有头插、尾插两种方式。
+如果next为true，可以认为是头插，其实是放到p.runnext中，比p.queue中的得到优先调度。如果之前p.runnext有值，还要该值对应的g放入p.queue中； 如果next为false，则尝试将其放置到p.queue中，这里也有快慢两种情况，快的情况就是，因为p.queue这个本地队列长度最大为256，如果有空余位置放入就返回，这是快的情况。慢的情况就是如果p.queue满了就要先转移1/2到调度器全局队列schedt.queue中，然后再放入，这个过程就慢一些。 放置过程中，如果p.runqueue满了怎么办，将其放置到调度器schedt.queue这个全局队列中。
+3 wakeup()逻辑
+这个函数内部执行startm(p, spinning)，来找一个m来执行goroutine，具体是怎么做的呢？
+如果没有指定p，比如新建goroutine时，此时会尝试检查有没有空闲的p，没有的话就直接返回了，相当于当前一次没有执行成功，那么只能下次调度的时候再执行这个新建的goroutine了；
+现在有空闲的p，我们还缺什么，m！然后mget找一个空闲的m，如果没有空闲的，就newm创建一个新的，本质上是通过clone系统调用创建的新的线程。然后将这个m和这个p关联起来，m.nextp = p。值得一提的是clone出来的线程对应的线程处理函数是mstart，mstart使用汇编写的，内部实际调用的是mstart0，它内部又请求mstart1，获取当前g：
+如果g.m==&amp;amp;m0，则执行mstartm0完成信号处理注册，继续执行其他；
+获取当前m.</description></item><item><title>GC: prioritizing low latency and simplicity</title><link>/blog/2021-05-01-gogc-prioritizing-low-latency-and-simplicity/</link><pubDate>Sat, 01 May 2021 11:17:56 +0800</pubDate><guid>/blog/2021-05-01-gogc-prioritizing-low-latency-and-simplicity/</guid><description>原文地址：https://blog.golang.org/go15gc
+介绍了当前软硬件大规模发展的趋势以及go GC需要优先解决的问题：低延迟和简单性（通过一个参数就可以控制，而非像JVM调参那样）。
+go团队的目标是设计一个面向未来十年的垃圾回收器，借鉴了十几年前发明的算法。go GC使用的是并发三色标记清除算法（concurrent, tri-color, mark-sweep collector），由Dijkstra在1978年提出。该算法与现在大多数企业级的GC实现不同，但是go团队认为该算法更适合于现代硬件的发展，也更有助于实现现代软件的GC低延迟目标。
+该GC算法中，每个对象只能是white、grey、black中的其中一种，heap可以看做是互相连接的对象构成的一个graph。GC算法流程是：
+GC开始时，所有对象都是white； GC遍历所有的roots对象（比如全局变量、栈变量）将其标记为灰色； 然后GC选择一个grey对象，将其标记为black，并扫描（scan）该对象检查它内部的指向其他对象的指针。如果发现有指针指向其他white对象，将white对象标记为grey； 该过程重复执行，直到没有任何的灰色对象； 最后，剩下的白色对象即认为是不可达对象，可以被回收再利用； GC过程和应用程序执行是并发进行的，应用程序也称为mutator，它会在GC运行期间修改一些指针的值。mutator必须遵循这样一条规则，就是不允许出现一个黑色对象指向一个白色对象，这样会导致对象被错误地回收。为了保证该规则成立，就需要引入写屏障（write barrier），它是编译阶段由编译器对mutator指针操作安插的一些特殊指令，用来跟踪对指针的修改，write barrier如果发现当前黑色对象的内部指针字段指向了外部的一个白色对象，则会将白色对象染色为grey，避免其被错误地GC掉，也保证其可以被继续扫描。
+有些GC相关的问题：
+什么时候启动GC？ 通过哪些指标来判断要启动GC？ GC应该如何与scheduler进行交互？ 如何暂停一个mutator线程足够长时间，以扫描器stack？ 如何表示white、grey和black三种颜色来实现高效地查找、扫描grey对象？ 如何知道roots对象在哪里？ 如何知道一个指向对象的指针的位置？ 如何最小化内存碎片？ 如何解决cache性能问题？ heap应该设置为多大？ 等等。 上述问题有些与内存分配有关，有些与可达对象分析有关，有些与goroutine调度有关，有些与性能有关，关于这些内容的讨论远远超出本文篇幅，可以自己参考相关的材料。
+为了解决GC性能问题，可以考虑为每一种优化加个参数来控制，开发人员可以自己调整这里的参数来达到想要的优化效果。但是这种做法时间久了之后会发现有非常多的参数，调优就会变得非常困难，比如JVM调优。go团队不想走这样的老路，力求简单高效。
+go通过GOGC这个环境变量来控制整个堆大小相对于现阶段可达对象大小的比例。GOGC默认值是100%，意味着当堆大小增长了当前可达对象大小的1倍时（2倍大小），就会触发GC；200%则意味着继续增长了当前可达对象的2倍时触发GC（3倍大小）。
+如果想降低GC花费的时间，就把这个值设置的大一点，因为这样不容易频繁触发GC； 如果愿意花费更多的GC时间来换取更少的内存占用，就把这个值设置的小一点，因为这样能够更加频繁地GC； 前面提到go团队要设计一个面向未来十年的垃圾回收器，未来十年机器内存容量可能会翻倍或者成倍增长，简单地将GOGC设置为一定倍率也可以很好地工作，也不用像JVM调优那样重新设置一堆地参数，调参大军好惨。go团队也可以倾听用户真正地诉求在运行时方面做更多的优化。</description></item><item><title>Locks实现:背后不为人知的故事</title><link>/blog/2021-04-17-locks%E5%AE%9E%E7%8E%B0%E9%82%A3%E4%BA%9B%E4%B8%8D%E4%B8%BA%E4%BA%BA%E7%9F%A5%E7%9A%84%E6%95%85%E4%BA%8B/</link><pubDate>Sat, 17 Apr 2021 11:32:36 +0800</pubDate><guid>/blog/2021-04-17-locks%E5%AE%9E%E7%8E%B0%E9%82%A3%E4%BA%9B%E4%B8%8D%E4%B8%BA%E4%BA%BA%E7%9F%A5%E7%9A%84%E6%95%85%E4%BA%8B/</guid><description>从事软件开发多年的你，真的理解locks背后的那些故事吗？锁是如何实现的，无锁指的又是什么，无锁真的移除了任何同步操作吗？为什么大家总是谈锁色变，锁的开销真的有那么大吗，平时编码中又该注意些什么呢？本文将结合go sync.Mutex对这些问题进行讨论。
+并发：我们关心什么 # 并发编程，开发人员应该对原子性、指令重排有深刻的认识。
+原子性 # 大家都了解过数据库事务的原子性，类似地，程序中也经常有些操作也需要达到类似的效果——被某种类似事务的机制“保护”起来，要么全部执行要么全部不执行。通常我们将这样需要保护的代码段称为临界区。我们希望临界区内的代码要么全部执行要么全部不执行，达到这种原子性的效果。
+其实不只是代码段，给一个int变量赋值，也需要考虑原子性，因为在不同的操作系统、处理器平台上，可能一个简单的int变量赋值需要涉及多条机器指令，而在多条指令执行期间，则可能发生各种事件，比如被其他CPU核的赋值指令写乱了同一变量的数据。设想下一个int变量4字节，但是处理器平台只有16位mov指令。再或者执行i++（i为int类型）操作，实际上是包含了read-modify-write三个操作，这几个操作中间也可能插入其他指令执行。当然一条机器指令也可能不是原子的，比如add src, dst，src和dst都是内存地址，这里就涉及到读取src和dst、计算、写回dst的多个操作……更不用说一个包含了多个字段的struct结构体的赋值了。
+这类原子性问题，可以通过一些相当低级的原子操作来保证，如int变量i++，可以考虑lock add指令（假定操作数位宽和int变量相同），稍复杂的数据结构（如struct）也可以使用一些“高级锁”来做同步保证，如go中的sync.Mutex。
+指令重排 # 指令重排的根源在于CPU的设计，古老的CPU只有一条取指、译码、执行、访存、写回的功能电路。联想下假如一个单线程程序执行阻塞网络IO的时候会发生什么，整个程序全阻塞在这里干不了其他的。CPU也存在类似问题，假如一条指令执行过程中因为数据没ready的问题不能执行，或者碰到多CPU多核间cache一致性同步，那CPU会stall，后续的指令都无法执行。
+所以CPU为了提高指令吞吐，增加了多条流水线设计，可以同时执行多条指令的取指、译码、执行、访存、写回，当然这其中有些指令是有数据依赖的，现代处理器支持寄存器重命名、指令乱序执行、重排序缓冲等功能，都是保证CPU执行效率的常用手段。如果想了解这方面的内容，see Computer Architecture: Dynamic Execution Core及系列课程Computer Architecture。这里贴一张超标量处理器的简图，方便大家理解这些优化手段所在的位置：
+为什么要指令重排：
+为什么要指令重排呢？
+因为希望提高cpu指令吞吐，就要并行执行指令，要并行执行指令，就要分析出哪些指令之间有数据依赖的，表面上一个架构寄存器RAX可能被相邻多条指令使用，但是可能是一个伪数据依赖，就需要通过分析、寄存器重命名（如RAX重命名为物理寄存器R11）来消除伪数据依赖，从而允许其在执行阶段并行执行（out-of-order）。
+一条指令的执行过程，会分为多个阶段，有些阶段是按序执行的（in-order），有些则是乱序执行的（out-of-order）。在指令乱序执行之后，可能会对程序正确性造成影响？影响究竟有多大，就需要参考硬件内存一致性模型，比如Intel x86处理器采用的是TSO模型（Total Store Order）, see x86-TSO: A Rigorous and Usable Programmer&amp;rsquo;s Model for x86 Multiprocessors。
+指令重排带来的问题：
+指令在CPU乱序执行，在某些并发场景下，可能会带来一些微妙的问题。比如：
+type num struct { a int b int } n := &amp;amp;num{} go func() { n.a = 1; n.b = 2; }() // g1 go func() { n.</description></item><item><title>如何看待gopanic及异常处理</title><link>/blog/2021-04-16-%E5%A6%82%E4%BD%95%E7%9C%8B%E5%BE%85gopanic%E5%8F%8A%E5%BC%82%E5%B8%B8%E5%A4%84%E7%90%86/</link><pubDate>Fri, 16 Apr 2021 13:47:21 +0800</pubDate><guid>/blog/2021-04-16-%E5%A6%82%E4%BD%95%E7%9C%8B%E5%BE%85gopanic%E5%8F%8A%E5%BC%82%E5%B8%B8%E5%A4%84%E7%90%86/</guid><description>Background # 最近有同学提问，大意是：“go中什么时候用panic、什么时候用error，能不能像其他语言中的try-catch一样用panic-recover来代替层层return err，或者应不应该recover一个panic之后转换为error？”
+这个问题引起了广泛的讨论，在对这几个问题的理解上，我本以为大家应该会认识到位的，没想到很多人认识很模糊。当然，好的地方就是总有有见识的同学站出来指出大家的问题。
+对于那些有灵性的同学，勤实践勤思考的同学，他会自然而然意识到哪种error handling pattern更好，也会有意识地去区分不同pattern的定位和应用场景。这类同学虽然没有什么理论术语支撑，但是他们的“经验”是贴近更好的设计思想、最佳实践的。如果更进一步，能愿意接受一些设计思想的洗礼，则可以将“经验”上升到“模式”，以指导更多人。
+panic != exception # go panic不同于其他语言中的exception，在设计、定位上是有明确的区别的，see: https://dave.cheney.net/2012/01/18/why-go-gets-exceptions-right。
+panics are always fatal to your program. In panicing you never assume that your caller can solve the problem. Hence panic is only used in exceptional circumstances, ones where it is not possible for your code, or anyone integrating your code to continue.
+go panic是用来表示程序出现了十分致命的错误，并且你不能假定这个错误能被解决。所以panic只在很少的场景下才会被用到，并且出现panic时，你的代码解决不了，引用这部分代码的其他代码也解决不了。
+所以，panic并非一般意义上的error，更不能用panic-recover代替层层向上传递error！
+对于，为了自身程序的健壮性，而在启动新的goroutine时，或者调用外部依赖的导出函数、方法时，可能选择recover一些预料之外的panic，并转换为error处理。
+有追求的开发人员，在panic的使用上应该始终遵循go设计理念，同时在程序的健壮性上也会采用些防御性编程的手段。
+panic vs exception # 我们很多开发人员都接触过多门语言，比如Java、C++，等等，这类语言都有异常处理机制，遇到一些意外事件时可以抛出一个异常，异常通常由try-catch block捕获并处理。</description></item><item><title>Go程序内存泄露问题快速定位</title><link>/blog/2021-04-14-go%E7%A8%8B%E5%BA%8F%E5%86%85%E5%AD%98%E6%B3%84%E9%9C%B2%E9%97%AE%E9%A2%98%E5%BF%AB%E9%80%9F%E5%AE%9A%E4%BD%8D/</link><pubDate>Wed, 14 Apr 2021 18:00:00 +0800</pubDate><guid>/blog/2021-04-14-go%E7%A8%8B%E5%BA%8F%E5%86%85%E5%AD%98%E6%B3%84%E9%9C%B2%E9%97%AE%E9%A2%98%E5%BF%AB%E9%80%9F%E5%AE%9A%E4%BD%8D/</guid><description>.myimg { width: 680px; padding-bottom: 1rem; } 前几天有同学反馈了cgo内存泄露问题，自己也针对这个问题探索了一番，算是为以后解决类似问题提前攒点经验吧。也趁机整理了一下go开发过程中内存泄露问题的一些常用排查方法，也希望对新接触go的同学有所帮助。整理之余，bcc工具之丰富也让我有点惊讶，也希望对自己日后的工作有所帮助吧。
+内存泄漏 # 内存泄露，一个老生常谈的问题，但即便是老手也会犯一些低级错误。如果没有可靠的研发流程保证在测试阶段发现问题，问题就容易被带到线上。计算资源始终是有限的，问题也不会因为资源充裕就消失不见，产生影响只是时间问题。影响有多大，就要结合场景来说了。
+内存泄漏，最可能的影响就是内存申请失败。但实际上操作系统更聪明，结合系统整体负载情况，它会为每个进程计算一个oom_score，并在内存资源紧张时选择一个合适的进程杀死并回收内存资源，see how does the oom killer decide which process to kill first。
+所以，内存泄露的最终结果，大概率会被操作系统kill，通常进程挂掉后，确认其是否是因为oom问题被kill，可以通过查看 /proc/messages 来确认是否有对应日志。有的话，那就坐实了oom killed（但是被oom killed的进程不一定意味着存在内存泄露）。
+服务质量 # 结合运维手段的变化，来看看是否内存泄漏问题对服务质量造成的影响。
+传统人工方式，通过感知告警、人为介入这种方式，效率低，要十几分钟； 通过虚拟机自动化部署的方式，感知异常自动重启虚拟机，耗时大约要分钟级； 通过docker容器化部署的方式，感知异常自动重启容器，耗时大约在秒级； 看上去现代运维方式一定程度上可以缓解这个问题，是，这也要分情况：
+如果内存泄露的代码路径不容易被触发，那可能要跑很久才能触发oom kill，如一周；但是如果代码路径在关键代码路径上，且请求量大，频繁触发内存泄露，那可能跑个几分钟就会挂掉； 跟每次内存泄露的内存大小也有关系，如果泄露的少，多苟活一阵子，反之容易暴毙； 进程一旦挂掉，这段时间就不能响应了，服务的健康监测、名字服务、负载均衡等措施需要一段时间才能感知到，如果请求量大，服务不可用依然会带来比较大的影响。 服务质量保证是不变的，所以别管用了什么运维手段，问题终究是问题，也是要解决的。
+Go内存泄漏 # 垃圾回收 # 自动内存管理减轻了开发人员管理内存的复杂性，不需要像C\C++开发者那样显示malloc、free，或者new、delete。垃圾回收借助于一些垃圾回收算法完成对无用内存的清理，垃圾回收算法有很多，比如：引用计数、标记清除、拷贝、分代等等。
+Go中垃圾回收器采用的是“并发三色标记清除”算法，see:
+Garbage Collection In Go : Part I - Semantics Garbage Collection In Go : Part II - GC Traces Garbage Collection In Go : Part III - GC Pacing Go语言支持自动内存管理，那还存在内存泄漏问题吗？</description></item></channel></rss>

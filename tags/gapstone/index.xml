@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>gapstone on</title><link>/tags/gapstone/</link><description>Recent content in gapstone on</description><generator>Hugo -- gohugo.io</generator><language>en-US</language><lastBuildDate>Sun, 06 Sep 2020 18:55:39 +0800</lastBuildDate><atom:link href="/tags/gapstone/index.xml" rel="self" type="application/rss+xml"/><item><title>剖析go二进制文件</title><link>/blog/2020-09-06-%E5%89%96%E6%9E%90go%E4%BA%8C%E8%BF%9B%E5%88%B6%E6%96%87%E4%BB%B6/</link><pubDate>Sun, 06 Sep 2020 18:55:39 +0800</pubDate><guid>/blog/2020-09-06-%E5%89%96%E6%9E%90go%E4%BA%8C%E8%BF%9B%E5%88%B6%E6%96%87%E4%BB%B6/</guid><description>为什么要反汇编？ # 这篇文章介绍下反汇编的基本概念，以及如何用go语言写一个简单的反汇编器。本文的目标就是为了尽可能描述下反汇编的的相关概念，以及让读者朋友们了解go二进制程序内部大致是什么样的。
+汇编代码不会撒谎，阅读汇编代码能够让我们更细致地了解处理器执行的指令到底做了什么。这也是为什么反汇编很重要的原因之一。如果我们有一个二进制程序，并且怀疑它有一些恶意的行为，通过反汇编来研究它就是一种很好的途径。再或者，如果你分析代码难以发现性能瓶颈，那么反汇编也是一种可以简化分析的途径。
+如果你担心能不能阅读x86_64汇编代码的问题，其实不用担心，我们大部分都不能很顺畅地阅读。你也没有必要为了搞懂这篇文章去阅读其他任何的汇编代码，不过如果有汇编基础的话确实会感觉更有意思点。这里有一篇介绍汇编基础的文章 A fundamental introduction to x86 assembly programming。
+什么是反汇编？ # 那么，什么是反汇编呢？
+反汇编，其实是将已经编译好的二进制程序，重新转换为汇编代码的过程。为了解释清楚，我们先考虑下从源代码编译构建的过程：
+汇编代码，其实是一种介于源代码、机器指令之间的中间代码表示，虽然大多数汇编指令是和机器指令对应的，但是也不绝对，比如go汇编就是一种跟机器指令没有明显对应关系的汇编形式。详细地可以参考go assembler设计对应的go blog一文。ok，言归正传。编译器首先将源代码转换为OS/架构特定的汇编代码，然后再通过汇编器将汇编代码转换为机器指令。从字面上就可以看出disassemble是assemble的一个逆向的过程，俗称反汇编。
+庆幸地是，go语言有一个相对标准、完整的工具链，汇编、反汇编都会比较方便。我们可以直接将源码转换成汇编代码来查看，例如通过运行命令 go build -gcflags -S program.go。如果我们已经有了一个编译构建好的二进制程序，这个时候想查看汇编代码的话，就得通过反汇编，可以运行命令 go tool objdump binaryFile。
+如果想了解如何实现汇编、反汇编的话，这篇文章其实已经可以结束了。但是如果来解释下如何从0到1构建一个反汇编器的话，还是有意思的。
+从0到1构建反汇编器？ # 首先，为了构建一个反汇编器，我们需要先知道二进制程序对应的目标机器架构包含的所有的机器指令。为了实现这个，我们可能要参考特定架构的手册来查阅到底有多少机器指令。如果对这个不熟悉，这个过程其实是比较困难的。其实，有很多种微处理器架构、汇编语法、指令集、编码模式，而且一直在变。光掌握这些不同机器架构包含的指令集就是一个很困难的事情，至于如何困难可以参考下这篇文章 how many x86_64 instructions are there anyway。
+庆幸地是，这些繁重的工作应被解决了，反汇编框架Capstone就是干这个事情的。Capstone其实已经是一个事实上的标准了，在各种反汇编工具中应用广泛。重新实现一个反汇编框架，其实没必要，这个过程只会是一个学习性的、枯燥的、重复的任务，我们不会介绍如何实现一个Capstone反汇编框架，只会介绍如何借助Capstone来实现反汇编的能力。在go语言中使用Capstone也简单，有一个针对go的实现gapstone。
+通过下面的代码我们可以初始化一个gapstone反汇编框架引擎，用它来执行后续的反汇编任务。
+engine, err := gapstone.New( gapstone.CS_ARCH_X86, gapstone.CS_MODE_64, ) if err != nil { log.Fatal(err) } 例如，我们可以将下面的原始指令数据传递给Capstone反汇编框架，然后该反汇编框架将会将这些原始指令数据转换为对应的x86_64下的指令。
+0x64 0x48 0x8B 0xC 0x25 0xF8 0xFF 0xFF 0xFF | mov rcx, qword ptr fs:[0xfffffffffffffff8] 把上面的操作放在一起，如下：</description></item></channel></rss>

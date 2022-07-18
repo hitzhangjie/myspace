@@ -1,0 +1,291 @@
+<!doctype html><html lang=en-us><head><meta charset=utf-8><meta http-equiv=x-ua-compatible content="ie=edge"><meta name=viewport content="width=device-width,initial-scale=1,shrink-to-fit=no"><link rel=preload as=font href=/fonts/vendor/jost/jost-v4-latin-regular.woff2 type=font/woff2 crossorigin><link rel=preload as=font href=/fonts/vendor/jost/jost-v4-latin-500.woff2 type=font/woff2 crossorigin><link rel=preload as=font href=/fonts/vendor/jost/jost-v4-latin-700.woff2 type=font/woff2 crossorigin><link rel=stylesheet href=/main.63b6b8ff933309fcc94a30e21d69932290c8643fa1a32893f5681778c776ed3e51c237a1acd00b42426b3bf780c351b4a6ce75b3b659915ef0dd610b2e027a8c.css integrity="sha512-Y7a4/5MzCfzJSjDiHWmTIpDIZD+hoyiT9WgXeMd27T5RwjehrNALQkJrO/eAw1G0ps51s7ZZkV7w3WELLgJ6jA==" crossorigin=anonymous><noscript><style>img.lazyload{display:none}</style></noscript><meta name=robots content="index, follow"><meta name=googlebot content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1"><meta name=bingbot content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1"><title>- MySpace</title><meta name=description content="终于来到了go语言相关的设计实现，go中sync.Mutex的设计有很多设计方面的考虑。
+我们看下对应的加锁解锁部分，对应的源码 see https://sourcegraph.com/github.com/golang/go/-/blob/src/sync/mutex.go#L72
+首先，了解下锁的定义，我们看到里面有个state字段，这个字段表示的是锁的状态，为0表示锁是解锁状态，其他状态可以参考下源码中的定义。
+// A Mutex is a mutual exclusion lcok. // The zero value for a Mutex is an unlocked mutex. // // A Mutex must not be copied after first use. type Mutext struct { state	int32 sema	uint32 } const ( mutexLocked = 1 &amp;lt;&amp;lt; iota // mutex is locked mutexWoken mutexStarving mutexWaiterShift = iota )  下面看下加解锁实现，多注意下state相关的逻辑，比较容易好理解。
+mutex.Lock() # fastpath # 首先，会执行fastpath，会尝试CAS加锁一次，如果没有很多锁竞争，且锁处于未加锁状态（state=0），大概率会加锁成功（state=1）成功返回。
+如果fastpath加锁失败了，比如尝试加锁前state != 0："><link rel=canonical href=/blog/2021-04-19-go-sync.mutex%E8%AE%BE%E8%AE%A1%E5%AE%9E%E7%8E%B0/><meta property="og:locale" content="en_US"><meta property="og:type" content="article"><meta property="og:title" content><meta property="og:description" content="终于来到了go语言相关的设计实现，go中sync.Mutex的设计有很多设计方面的考虑。
+我们看下对应的加锁解锁部分，对应的源码 see https://sourcegraph.com/github.com/golang/go/-/blob/src/sync/mutex.go#L72
+首先，了解下锁的定义，我们看到里面有个state字段，这个字段表示的是锁的状态，为0表示锁是解锁状态，其他状态可以参考下源码中的定义。
+// A Mutex is a mutual exclusion lcok. // The zero value for a Mutex is an unlocked mutex. // // A Mutex must not be copied after first use. type Mutext struct { state	int32 sema	uint32 } const ( mutexLocked = 1 << iota // mutex is locked mutexWoken mutexStarving mutexWaiterShift = iota )  下面看下加解锁实现，多注意下state相关的逻辑，比较容易好理解。
+mutex.Lock() # fastpath # 首先，会执行fastpath，会尝试CAS加锁一次，如果没有很多锁竞争，且锁处于未加锁状态（state=0），大概率会加锁成功（state=1）成功返回。
+如果fastpath加锁失败了，比如尝试加锁前state != 0："><meta property="og:url" content="/blog/2021-04-19-go-sync.mutex%E8%AE%BE%E8%AE%A1%E5%AE%9E%E7%8E%B0/"><meta property="og:site_name" content="MySpace"><meta property="og:image" content="/doks.png"><meta property="og:image:alt" content="MySpace"><meta name=twitter:card content="summary_large_image"><meta name=twitter:site content="@hitzhangjie"><meta name=twitter:creator content="@hitzhangjie"><meta name=twitter:title content><meta name=twitter:description content><meta name=twitter:image content="/doks.png"><meta name=twitter:image:alt content><script type=application/ld+json>{"@context":"https://schema.org","@graph":[{"@type":"Person","@id":"/#/schema/person/1","name":"","url":"/","sameAs":["https://twitter.com/hitzhangjie","https://www.linkedin.com/in/hitzhangjie/","https://github.com/hitzhangjie"],"image":{"@type":"ImageObject","@id":"/#/schema/image/1","url":"/\u003cnil\u003e","width":null,"height":null,"caption":""}},{"@type":"WebSite","@id":"/#/schema/website/1","url":"/","name":"MySpace","description":"MySpace is a hitzhangjie\u0027s personal space, for blogs, books, journey, thinkings.","publisher":{"@id":"/#/schema/person/1"}},{"@type":"WebPage","@id":"/blog/2021-04-19-go-sync.mutex%E8%AE%BE%E8%AE%A1%E5%AE%9E%E7%8E%B0/","url":"/blog/2021-04-19-go-sync.mutex%E8%AE%BE%E8%AE%A1%E5%AE%9E%E7%8E%B0/","name":"","description":"","isPartOf":{"@id":"/#/schema/website/1"},"about":{"@id":"/#/schema/person/1"},"datePublished":"0001-01-01T00:00:00CET","dateModified":"0001-01-01T00:00:00CET","breadcrumb":{"@id":"/blog/2021-04-19-go-sync.mutex%E8%AE%BE%E8%AE%A1%E5%AE%9E%E7%8E%B0/#/schema/breadcrumb/1"},"primaryImageOfPage":{"@id":"/blog/2021-04-19-go-sync.mutex%E8%AE%BE%E8%AE%A1%E5%AE%9E%E7%8E%B0/#/schema/image/2"},"inLanguage":"","potentialAction":[{"@type":"ReadAction","target":["/blog/2021-04-19-go-sync.mutex%E8%AE%BE%E8%AE%A1%E5%AE%9E%E7%8E%B0/"]}]},{"@type":"BreadcrumbList","@id":"/blog/2021-04-19-go-sync.mutex%E8%AE%BE%E8%AE%A1%E5%AE%9E%E7%8E%B0/#/schema/breadcrumb/1","name":"Breadcrumbs","itemListElement":[{"@type":"ListItem","position":1,"item":{"@type":"WebPage","@id":"/","url":"/","name":"Home"}},{"@type":"ListItem","position":2,"item":{"@id":"/blog2021-04-19-go-sync.mutex%E8%AE%BE%E8%AE%A1%E5%AE%9E%E7%8E%B0/"}}]},{"@context":"https://schema.org","@graph":[{"@type":"Article","@id":"/#/schema/article/1","headline":"","description":"","isPartOf":{"@id":"/blog/2021-04-19-go-sync.mutex%E8%AE%BE%E8%AE%A1%E5%AE%9E%E7%8E%B0/"},"mainEntityOfPage":{"@id":"/blog/2021-04-19-go-sync.mutex%E8%AE%BE%E8%AE%A1%E5%AE%9E%E7%8E%B0/"},"datePublished":"0001-01-01T00:00:00CET","dateModified":"0001-01-01T00:00:00CET","author":{"@id":"/#/schema/person/2"},"publisher":{"@id":"/#/schema/person/1"},"image":{"@id":"/blog/2021-04-19-go-sync.mutex%E8%AE%BE%E8%AE%A1%E5%AE%9E%E7%8E%B0/#/schema/image/2"}}]},{"@context":"https://schema.org","@graph":[{"@type":"Person","@id":"/#/schema/person/2","name":null,"sameAs":[]}]},{"@context":"https://schema.org","@graph":[{"@type":"ImageObject","@id":"/blog/2021-04-19-go-sync.mutex%E8%AE%BE%E8%AE%A1%E5%AE%9E%E7%8E%B0/#/schema/image/2","url":"/doks.png","contentUrl":"/doks.png","caption":""}]}]}</script><meta name=theme-color content="#fff"><link rel=icon href=/favicon.ico sizes=any><link rel=icon type=image/svg+xml href=/favicon.svg><link rel=apple-touch-icon sizes=180x180 href=/apple-touch-icon.png><link rel=icon type=image/png sizes=32x32 href=/favicon-32x32.png><link rel=icon type=image/png sizes=16x16 href=/favicon-16x16.png><link rel=manifest crossorigin=use-credentials href=/site.webmanifest><script type=text/javascript src="https://platform-api.sharethis.com/js/sharethis.js#property=607868a58d7101001829a8df&product=sop" async></script><style>[alt~=sharing]{border:0;box-shadow:none}div#st-1{text-align:unset}div#st-1 .st-btn{height:24px;padding:0 4px}div#st-1 .st-btn>img{top:4.2px}div#st-2 .st-btn{height:24px;padding:0 4px}div#st-2 .st-btn>img{top:4.2px}</style></head><body class="blog single"><div class=sticky-top><div class=header-bar></div><header class="navbar navbar-expand-lg navbar-light doks-navbar"><nav class="container-xxl flex-wrap flex-lg-nowrap" aria-label="Main navigation"><a class="navbar-brand order-0" href=/ aria-label=MySpace>MySpace</a>
+<button class="btn btn-menu order-2 d-block d-lg-none" type=button data-bs-toggle=offcanvas data-bs-target=#offcanvasDoks aria-controls=offcanvasDoks aria-label="Open main menu"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentcolor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-menu"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button><div class="offcanvas offcanvas-end border-0 py-lg-1" tabindex=-1 id=offcanvasDoks data-bs-backdrop=true aria-labelledby=offcanvasDoksLabel><div class="header-bar d-lg-none"></div><div class="offcanvas-header d-lg-none"><h2 class="h5 offcanvas-title ps-2" id=offcanvasDoksLabel><a class=text-dark href=/>MySpace</a></h2><button type=button class="btn-close text-reset me-2" data-bs-dismiss=offcanvas aria-label="Close main menu"></button></div><div class="offcanvas-body p-4 p-lg-0"><ul class="nav flex-column flex-lg-row align-items-lg-center mt-2 mt-lg-0 ms-lg-2 me-lg-auto"><li class=nav-item><a class="nav-link ps-0 py-1 active" href=/blog/>Blog</a></li><li class=nav-item><a class="nav-link ps-0 py-1" href=/books/>Books</a></li><li class=nav-item><a class="nav-link ps-0 py-1" href=/journey/introduction>Journey</a></li></ul><hr class="text-black-50 my-4 d-lg-none"><form class="doks-search position-relative flex-grow-1 ms-lg-auto me-lg-2"><input id=search class="form-control is-search" type=search placeholder="Search docs..." aria-label="Search docs..." autocomplete=off><div id=suggestions class="shadow bg-white rounded d-none"></div></form><hr class="text-black-50 my-4 d-lg-none"><ul class="nav flex-column flex-lg-row"><li class=nav-item><a class="nav-link social-link" href=https://twitter.com/hitzhangjie><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentcolor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-twitter"><path d="M23 3a10.9 10.9.0 01-3.14 1.53 4.48 4.48.0 00-7.86 3v1A10.66 10.66.0 013 4s-4 9 5 13a11.64 11.64.0 01-7 2c9 5 20 0 20-11.5a4.5 4.5.0 00-.08-.83A7.72 7.72.0 0023 3z"/></svg><small class="ms-2 d-lg-none">Twitter</small></a></li><li class=nav-item><a class="nav-link social-link" href=https://github.com/hitzhangjie><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentcolor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-github"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37.0 00-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44.0 0020 4.77 5.07 5.07.0 0019.91 1S18.73.65 16 2.48a13.38 13.38.0 00-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07.0 005 4.77 5.44 5.44.0 003.5 8.55c0 5.42 3.3 6.61 6.44 7A3.37 3.37.0 009 18.13V22"/></svg><small class="ms-2 d-lg-none">GitHub</small></a></li></ul></div></div></nav></header></div><div class="wrap container-xxl" role=document><div class=content><div class="row flex-xl-nowrap"><div class="col-lg-5 col-xl-4 docs-sidebar"><nav class=docs-links aria-label="Main navigation"></nav></div><nav class="docs-toc d-none d-xl-block col-xl-3" aria-label="Secondary navigation"><div class=page-links><h3>On this page</h3><nav id=TableOfContents><ul><li><ul><li><ul><li><a href=#mutexlock>mutex.Lock()</a><ul><li><a href=#fastpath>fastpath</a></li><li><a href=#slowpath>slowpath</a></li></ul></li><li><a href=#mutexunlock>mutex.Unlock()</a><ul><li><a href=#fastpath-1>fastpath</a></li><li><a href=#slowpath-1>slowpath</a></li></ul></li></ul></li><li><a href=#heading></a></li></ul></li></ul></nav></div></nav><main class="docs-content col-lg-11 col-xl-9"><h1></h1><div style=display:flex><div>分享:&nbsp;&nbsp;</div><div><div class=sharethis-inline-share-buttons></div></div></div><hr><p class=lead></p><p>终于来到了go语言相关的设计实现，go中sync.Mutex的设计有很多设计方面的考虑。</p><p>我们看下对应的加锁解锁部分，对应的源码 see https://sourcegraph.com/github.com/golang/go/-/blob/src/sync/mutex.go#L72</p><p>首先，了解下锁的定义，我们看到里面有个state字段，这个字段表示的是锁的状态，为0表示锁是解锁状态，其他状态可以参考下源码中的定义。</p><pre><code class=language-go>// A Mutex is a mutual exclusion lcok.
+// The zero value for a Mutex is an unlocked mutex.
+//
+// A Mutex must not be copied after first use.
+type Mutext struct {
+    state	int32
+    sema	uint32
+}
+
+const (
+    mutexLocked = 1 &lt;&lt; iota // mutex is locked
+    mutexWoken
+    mutexStarving
+    mutexWaiterShift = iota
+)
+</code></pre><p>下面看下加解锁实现，多注意下state相关的逻辑，比较容易好理解。</p><h3 id=mutexlock>mutex.Lock() <a href=#mutexlock class=anchor aria-hidden=true>#</a><a href=#mutexlock class=anchor aria-hidden=true>#</a></h3><h4 id=fastpath>fastpath <a href=#fastpath class=anchor aria-hidden=true>#</a><a href=#fastpath class=anchor aria-hidden=true>#</a></h4><p>首先，会执行fastpath，会尝试CAS加锁一次，如果没有很多锁竞争，且锁处于未加锁状态（state=0），大概率会加锁成功（state=1）成功返回。</p><p>如果fastpath加锁失败了，比如尝试加锁前state != 0：</p><ul><li><p>state可能为1</p><p>此时，表示锁已经被锁定，新goroutine尝试加锁请求失败，这种很好理解；</p></li><li><p>state != 0，但也不是1（mutexLocked）</p><p>这种情况就比较特殊了，涉及到go的一些锁优化，拿个例子来说一下。比如state有可能为4（mutexStarving），即它确实处于解锁状态(state&mutexLocked=0)，但却处于starvation模式下，这说明之前有尝试加锁的goroutine很久没有拿到锁了，所以将当前锁的模式从normal修改为了starvation。</p><p>为了避免调度延迟过大，go会优先受理部分goroutine的加锁请求，所以，这种情况新加入抢锁的goroutine也是不能拿到锁的。</p></li></ul><p>OK，有了这个大致的了解之后，我们继续看加锁失败后的处理路径，继续执行slowpath。</p><pre><code class=language-go>// Lock locks m.
+// If the lock is already in use, the calling goroutine
+// blocks until the mutex is available.
+func (m *Mutex) Lock() {
+	// Fast path: grab unlocked mutex.
+	if atomic.CompareAndSwapInt32(&amp;m.state, 0, mutexLocked) {
+		if race.Enabled {
+			race.Acquire(unsafe.Pointer(m))
+		}
+		return
+	}
+	// Slow path (outlined so that the fast path can be inlined)
+	m.lockSlow()
+}
+</code></pre><h4 id=slowpath>slowpath <a href=#slowpath class=anchor aria-hidden=true>#</a><a href=#slowpath class=anchor aria-hidden=true>#</a></h4><p>这部分就有很多优化措施了，感兴趣的可以阅读这里的源码，我们先尝试总结下。</p><p>see https://sourcegraph.com/github.com/golang/go/-/blob/src/sync/mutex.go#L84</p><pre><code class=language-go>func (m *Mutex) lockSlow() {
+	...
+	old := m.state
+	for {
+		// Don't spin in starvation mode, ownership is handed off to waiters
+		// so we won't be able to acquire the mutex anyway.
+		if old&amp;(mutexLocked|mutexStarving) == mutexLocked &amp;&amp; runtime_canSpin(iter) {
+			// Active spinning makes sense.
+			// Try to set mutexWoken flag to inform Unlock
+			// to not wake other blocked goroutines.
+			if !awoke &amp;&amp; old&amp;mutexWoken == 0 &amp;&amp; old&gt;&gt;mutexWaiterShift != 0 &amp;&amp;
+				atomic.CompareAndSwapInt32(&amp;m.state, old, old|mutexWoken) {
+				awoke = true
+			}
+			runtime_doSpin()
+			iter++
+			old = m.state
+			continue
+		}
+        ...
+    }
+    ...
+}
+</code></pre><p>加锁失败后，失败原因有多种，要么是锁已经被锁定了，要么是处于饥饿模式。对应的处理方式也不一样，所以开头先判断下。</p><p>如果<code>old&(mutexLocked|mutexStarvig) == mutexLocked</code>为true，则表示之前加锁的失败原因是，锁已经被锁定了。那怎么办呢？难道要让goroutine立即去睡觉觉？goroutine睡着后再被唤醒参与调度这个开销和线程比是小，但是还是有的嘛，能不能再尝试几次，避免过早睡眠？当然可以。</p><p>那就让当前goroutine自旋+重新加锁几次试试，就是这里的<code>runtime_canSpin(iter)</code>来控制能否自旋了。</p><pre><code class=language-go>// Active spinning for sync.Mutex.
+//go:linkname sync_runtime_canSpin sync.runtime_canSpin
+//go:nosplit
+func sync_runtime_canSpin(i int) bool {
+	// sync.Mutex is cooperative, so we are conservative with spinning.
+	// Spin only few times and only if running on a multicore machine and
+	// GOMAXPROCS&gt;1 and there is at least one other running P and local runq is empty.
+	// As opposed to runtime mutex we don't do passive spinning here,
+	// because there can be work on global runq or on other Ps.
+	if i &gt;= active_spin || ncpu &lt;= 1 || gomaxprocs &lt;= int32(sched.npidle+sched.nmspinning)+1 {
+		return false
+	}
+	if p := getg().m.p.ptr(); !runqempty(p) {
+		return false
+	}
+	return true
+}
+</code></pre><p>最多自旋4次，当然还有其他要求，就是必须运行在多核机器上，并且GOMAXPROCS>1，并且至少有另外一个正在运行的P且其runq为空。大家可以想一下为什么？如果不这么限制，那谁来释放锁呢，当前goroutine大概率自旋无效，也优化不了什么。</p><p>这些条件满足时，检查当前g运行的P上runq是否为空，如果为空才允许自旋，为什么？会影响到runq中的goroutine的调度执行吧。</p><p>最后再看lockSlow中的代码逻辑：</p><pre><code class=language-go>func (m *Mutex) lockSlow() {
+	...
+	old := m.state
+	for {
+		if old&amp;(mutexLocked|mutexStarving) == mutexLocked &amp;&amp; runtime_canSpin(iter) {
+			// Active spinning makes sense.
+			// Try to set mutexWoken flag to inform Unlock
+			// to not wake other blocked goroutines.
+			if !awoke &amp;&amp; old&amp;mutexWoken == 0 &amp;&amp; old&gt;&gt;mutexWaiterShift != 0 &amp;&amp;
+				atomic.CompareAndSwapInt32(&amp;m.state, old, old|mutexWoken) {
+				awoke = true
+			}
+			runtime_doSpin()
+			iter++
+			old = m.state
+			continue
+		}
+        ...
+    }
+    ...
+}
+</code></pre><p>大家看刚开加锁失败后awoke=false, 并且假定old=mutexLocked，old&#187;mutexWaiterShift这个写法，让人猜测m.state中还存储了waiter相关的信息，然后尝试将m.state设置上mutexWoken，awoke=true，没看出这是在干啥。</p><p>然后runtime_doSpin开始空转CPU，可以理解成一个for循环从30减到0，结束。这么做无非就是想等其他goroutine把锁释放掉。</p><pre><code class=language-go>const (
+    active_spin_cnt = 30
+)
+
+//go:linkname sync_runtime_doSpin sync.runtime_doSpin
+//go:nosplit
+func sync_runtime_doSpin() {
+	procyield(active_spin_cnt)
+}
+
+func procyield(cycles uint32)
+
+TEXT runtime·procyield(SB),NOSPLIT,$0-0
+	MOVL	cycles+0(FP), AX
+again:
+	PAUSE
+	SUBL	$1, AX
+	JNZ	again
+	RET
+</code></pre><p>然后iter++，表示自旋次数+1（最多4次），更新锁状态，注意此时mutexWoken设置了，现在可以猜测下mutexWoken表示啥了，它表示的是mutex有没有唤醒协程来抢锁。</p><p>自旋之后continue，进入循环体的下一次循环，继续检查锁的状态：</p><ul><li>如果锁依旧被锁定，且当前可以继续自旋，则继续自旋；</li><li>如果锁依旧被锁定，且当前超过了自旋次数，则执行下面的逻辑；</li><li>如果锁被解锁了，则也执行下面的逻辑；</li></ul><p>下面的new表示当前代码执行完后锁的状态，有这么几种情况：</p><ul><li>锁还没被释放，锁必然处于锁定状态，new&mutexLocked==1；</li><li>锁已经被释放，锁如果处于normal模式，当前goroutine必抢锁成功，所以new|=mutexLocked也很好理解；</li><li>锁已经被释放，锁如果处于starvation模式，当前goroutine抢锁失败，入队等待，但是这个锁将直接递交给等待队列中的第一个waiter，不用这个waiter被唤醒后抢锁，所以其new|=mutexLocked没什么疑问了；</li></ul><p>继续看waiter标志位相关的设置：检查old状态，如果仍是锁定或者饿死状态，则直接将new中设置mutexWaiter标记。干嘛用的，表示有waiter在等待锁释放啊。</p><p>继续看starvation标志位相关的设置：如果发现锁之前的状态就是饥饿模式了，并且没有被锁定，那么锁的最新状态还是饥饿模式（new|=mutexStarving岂不是多余？）</p><pre><code class=language-go>func (m *Mutex) lockSlow() {
+	...
+	old := m.state
+	for {
+		new := old
+		// Don't try to acquire starving mutex, new arriving goroutines must queue.
+		if old&amp;mutexStarving == 0 {
+			new |= mutexLocked
+		}
+		if old&amp;(mutexLocked|mutexStarving) != 0 {
+			new += 1 &lt;&lt; mutexWaiterShift
+		}
+		// The current goroutine switches mutex to starvation mode.
+		// But if the mutex is currently unlocked, don't do the switch.
+		// Unlock expects that starving mutex has waiters, which will not
+		// be true in this case.
+		if starving &amp;&amp; old&amp;mutexLocked != 0 {
+			new |= mutexStarving
+		}
+        ...
+    }
+    ....
+}
+</code></pre><p>继续看，如果当前mutex已经有被唤醒的goroutine尝试抢锁，那么new里面mutexWoken应该为1，如果为0是一种不一致状态，报错。然后从new中清除这一标记位，也需mutexwoken代表的就是当前goroutine吧，一次唤醒一个嘛。</p><pre><code class=language-go>func (m *Mutex) lockSlow() {
+	...
+	old := m.state
+	for {
+		new := old
+		...
+        
+		if awoke {
+			// The goroutine has been woken from sleep,
+			// so we need to reset the flag in either case.
+			if new&amp;mutexWoken == 0 {
+				throw(&quot;sync: inconsistent mutex state&quot;)
+			}
+			new &amp;^= mutexWoken
+		}
+        ...
+     }
+     ...
+}
+</code></pre><p>继续看，CAS更新下锁状态m.state，注意此时new里面设置了locked（starvation可能有也可能没有）。</p><p>继续检查，如果之前锁状态不是锁定状态、不是饥饿状态，那么现在肯定就是锁定成功了，退出循环结束加锁过程。</p><p>如果发现waitStartTime不为0，说明之前已经有几轮循环来尝试过获得锁了，现在要算一下当前这次加锁操作总共等待了多久了。</p><pre><code class=language-go>func (m *Mutex) lockSlow() {
+	var waitStartTime int64
+    ...
+	old := m.state
+	for {
+		new := old
+		...
+
+		if atomic.CompareAndSwapInt32(&amp;m.state, old, new) {
+			if old&amp;(mutexLocked|mutexStarving) == 0 {
+				break // locked the mutex with CAS
+			}
+			// If we were already waiting before, queue at the front of the queue.
+			queueLifo := waitStartTime != 0
+			if waitStartTime == 0 {
+				waitStartTime = runtime_nanotime()
+			}
+            ... 
+        }
+        ...
+    }
+    ...
+}
+</code></pre><p>现在来算一下当前goroutine加锁等待了多久了，这个时间很好算，直接拿当前时间减去第第一次开始的时间就算出来了，<code>runtime_nanotime()-waitStartTime()</code>，并且发现，如果这个时间超过阈值1ms，就会将starving设为true，意味着mutex将被设置为饥饿模式，当然如果以前就是饥饿模式，现在肯定也是饥饿模式了。</p><p>另外注意queueLifo的值，如果是新抢锁的goroutine，那么为false，调用runtime_Semacquire时会将该goroutine假如到队列的末尾排队，如果是之前唤醒过的goroutine，则会将其添加到队列的对首，如果锁变成了饥饿模式且被释放了，则直接交给对首的goroutine执行。</p><p>这个函数runtime_semacquiremutex，还挺关键的：</p><p>信号量semaroot好理解，它是地址addr处对应的信号量，本身内部维护了一个等待信号量的sudog（等待执行的g）列表，对mutex而言就是等待抢锁的goroutines/waiters列表。</p><p>mutex里面为什么要加一个字段sema，其实就是为了间接具备这样一种能力，维护一个&sema的信号量，维护一个引抢锁而阻塞的goroutine列表，以方便在锁被释放的时候，再把它们唤醒。</p><p>看下这个函数是怎么实现的吧，它调用了semacquire1这个函数，这个函数内部就是获得&addr处对应的信号量，然后尝试对semaroot.lock加锁，这个锁是一个runtime.mutex，</p><p>我擦，我发现这个函数里面调用了semacquire1(&mldr;)，这个函数里面调用了lockWithRank，lockWithRank调用了lock2()，lock2内部使用了Linux系统调用futex这个能够把线程挂起的重量级锁！</p><p>TODO 打脸，前面总结说sync.Mutex没有使用futex，哇擦！</p><p>m.sema这个变量表示的是一个信号量，但是这个信号量是用来通知啥的呢？这个信号量对应的有一个等待队列的，如果lifo为true，则表示将当前的goroutine对应的后续sudog放入队列的头部，这样方便饿死模式下直接将mutex的拥有权交给这个对首的waiter，避免其等锁等太久。</p><ul><li>如果拿到了这个信号量就立即返回了；</li><li>如果拿不到这个信号量就要做后面的处理了；</li></ul><p>可能有多个并发的goroutine来抢锁的情况，可能之前已经有没抢到阻塞的goroutine了，这里先找一个阻塞的goroutine，获得信号量地址对应的一个数据结构，记为semaroot，这个维护了mutex上因为抢锁失败而等待的goroutine（waiters）队列。</p><p>对这个semaroot.lock的加锁操作，用了自旋、CAS、futex，为啥用futex呢？这不相当于sync.Mutex间接用了futex嘛！那如果加锁失败不是直接阻塞线程了吗！</p><ul><li>这种情况下好的情况是几个线程自旋一下抢到sync.Mutex.sema，大概率会成功，但是锁竞争严重的时候还是会失败，怎么办总不能一直自旋不干活啊，注意了，这里调用了</li></ul><pre><code class=language-go>func (m *Mutex) lockSlow() {
+	...
+	old := m.state
+	for {
+		new := old
+		...
+
+		if atomic.CompareAndSwapInt32(&amp;m.state, old, new) {
+            ...
+			queueLifo := waitStartTime != 0
+           	...
+			runtime_SemacquireMutex(&amp;m.sema, queueLifo, 1)
+			starving = starving || runtime_nanotime()-waitStartTime &gt; starvationThresholdNs
+			old = m.state
+			if old&amp;mutexStarving != 0 {
+				// If this goroutine was woken and mutex is in starvation mode,
+				// ownership was handed off to us but mutex is in somewhat
+				// inconsistent state: mutexLocked is not set and we are still
+				// accounted as waiter. Fix that.
+				if old&amp;(mutexLocked|mutexWoken) != 0 || old&gt;&gt;mutexWaiterShift == 0 {
+					throw(&quot;sync: inconsistent mutex state&quot;)
+				}
+				delta := int32(mutexLocked - 1&lt;&lt;mutexWaiterShift)
+				if !starving || old&gt;&gt;mutexWaiterShift == 1 {
+					// Exit starvation mode.
+					// Critical to do it here and consider wait time.
+					// Starvation mode is so inefficient, that two goroutines
+					// can go lock-step infinitely once they switch mutex
+					// to starvation mode.
+					delta -= mutexStarving
+				}
+				atomic.AddInt32(&amp;m.state, delta)
+				break
+			}
+			awoke = true
+			iter = 0
+		} else {
+			old = m.state
+		}
+	}
+
+	...
+}
+</code></pre><p>sync.Mutex里面的锁实现，不使用futex，即当Lock失败时，不会导致调用的进程线程被阻塞，而只是将当前goroutine阻塞，go runtime scheduler仍然可以在当前线程上调度执行其他的goroutine，等锁被Unlock时，就有机会再唤醒之前Lock失败的goroutine执行。</p><p>另外，go sync.Mutex做了很多优化，大致总结一下。sync.Mutex有两种工作模式：normal mode 和 starvation mode，两种模式对执行Lock、Unlock的goroutine会产生不同的影响。</p><ul><li><p>normal mode</p><p>该模式下，waiters（goroutines）会按照加锁申请进入一个FIFO的队列，一个被唤醒的waiter不一定能够立即持有锁，它要和所有新的发起加锁请求的goroutines竞争。新到达的goroutines通常有一个优势——它们已经在CPU上运行了，并且有很多，所以一个刚被唤醒的waiter大概率会竞争锁失败。</p><p>这种情况下，这个失败的waiter会被加入到这个FIFO队列的对首，如果一个waiter竞争锁超过1ms还没有成功，就会将mutex从normal mode切换为startvation mode。</p></li><li><p>starvation mode</p><p>该模式下，当一个goroutine释放锁时，锁的拥有者立即从该goroutine转交给对首的waiter。新到达的goroutines不会尝试获得锁，尽管它能观察到锁好像被释放掉了。这种模式下，新到达的goroutines会追加到FIFO的队列的末尾。</p></li></ul><p>当一个waiter收到一个mutex的拥有者权限时，它会检查，如果：1）它是这个锁竞争等待队列中的最后一个waiter；或者 2）它的加锁等待时间小于1ms，此时将把mutex从starvation mode切换为normal mode。</p><h3 id=mutexunlock>mutex.Unlock() <a href=#mutexunlock class=anchor aria-hidden=true>#</a><a href=#mutexunlock class=anchor aria-hidden=true>#</a></h3><h4 id=fastpath-1>fastpath <a href=#fastpath-1 class=anchor aria-hidden=true>#</a><a href=#fastpath-1 class=anchor aria-hidden=true>#</a></h4><p>先尝试CAS去掉加锁标志位，其实返回的是锁的新状态，如果之前状态是locked，现在unlocked去掉了这个标志位，如果新状态state==0，表示没什么其他要处理的了，直接返回就可以了，反之，则说明锁可能被设置了其他的状态，如前面提到的锁的normal、starvation mode，还需要进入slowpath进一步处理。</p><pre><code class=language-go>// Unlock unlocks m.
+// It is a run-time error if m is not locked on entry to Unlock.
+//
+// A locked Mutex is not associated with a particular goroutine.
+// It is allowed for one goroutine to lock a Mutex and then
+// arrange for another goroutine to unlock it.
+func (m *Mutex) Unlock() {
+	if race.Enabled {
+		_ = m.state
+		race.Release(unsafe.Pointer(m))
+	}
+
+	// Fast path: drop lock bit.
+	new := atomic.AddInt32(&amp;m.state, -mutexLocked)
+	if new != 0 {
+		// Outlined slow path to allow inlining the fast path.
+		// To hide unlockSlow during tracing we skip one extra frame when tracing GoUnblock.
+		m.unlockSlow(new)
+	}
+}
+</code></pre><h4 id=slowpath-1>slowpath <a href=#slowpath-1 class=anchor aria-hidden=true>#</a><a href=#slowpath-1 class=anchor aria-hidden=true>#</a></h4><p>锁的状态不只是有持有、未持有这几种，那看来这里是要处理其他几种锁状态的情况了。</p><pre><code class=language-go>const (
+	mutexLocked = 1 &lt;&lt; iota // mutex is locked
+	mutexWoken
+	mutexStarving
+	mutexWaiterShift = iota
+)
+</code></pre><p>继续看源码，首先做个检查，当前goroutine调用Unlock之前是否有持有这把锁，很好比较，只要检查 <code>(new+mutexLocked) & mutexLocked</code> 下便知道。</p><p>QA：如果当前goroutine没有持有过锁，前面fastpath中却去掉了锁标志位，走到这里检查发现之前没有持有锁，这是很严重的问题，直接throw了，也没什么善后的，直接退出啦，程序员自己抓紧改bug吧，继续跑也会造成bug！</p><p>然后这里面主要是这个函数runtime_Semrelease：</p><ul><li>如果是正常模式，这个函数从对头取出一个sudog（等待锁的goroutine），然后将其丢入runq等待被调度；</li><li>如果是饥饿模式，这个函数从头取出一个sudog（等待锁的goroutine），然后将其丢入runq，并立即让出CPU，相当于让这个sudog尽可能快地被执行到。</li></ul><pre><code class=language-go>func (m *Mutex) unlockSlow(new int32) {
+	if (new+mutexLocked)&amp;mutexLocked == 0 {
+		throw(&quot;sync: unlock of unlocked mutex&quot;)
+	}
+	if new&amp;mutexStarving == 0 {
+		old := new
+		for {
+			// If there are no waiters or a goroutine has already
+			// been woken or grabbed the lock, no need to wake anyone.
+			// In starvation mode ownership is directly handed off from unlocking
+			// goroutine to the next waiter. We are not part of this chain,
+			// since we did not observe mutexStarving when we unlocked the mutex above.
+			// So get off the way.
+			if old&gt;&gt;mutexWaiterShift == 0 || old&amp;(mutexLocked|mutexWoken|mutexStarving) != 0 {
+				return
+			}
+			// Grab the right to wake someone.
+			new = (old - 1&lt;&lt;mutexWaiterShift) | mutexWoken
+			if atomic.CompareAndSwapInt32(&amp;m.state, old, new) {
+				runtime_Semrelease(&amp;m.sema, false, 1)
+				return
+			}
+			old = m.state
+		}
+	} else {
+		// Starving mode: handoff mutex ownership to the next waiter, and yield
+		// our time slice so that the next waiter can start to run immediately.
+		// Note: mutexLocked is not set, the waiter will set it after wakeup.
+		// But mutex is still considered locked if mutexStarving is set,
+		// so new coming goroutines won't acquire it.
+		runtime_Semrelease(&amp;m.sema, true, 1)
+	}
+}
+</code></pre><h2 id=heading><a href=#heading class=anchor aria-hidden=true>#</a><a href=#heading class=anchor aria-hidden=true>#</a></h2><div class=edit-page><a href=https://github.com/hitzhangjie/myspace/blob/master/content/blog/2021-04-19-go%20sync.Mutex%e8%ae%be%e8%ae%a1%e5%ae%9e%e7%8e%b0.md><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentcolor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-edit-2"><path d="M17 3a2.828 2.828.0 114 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>Edit this page on GitHub</a></div><div class="docs-navigation d-flex justify-content-between"><a href=/blog/2017-02-09-protobuf%E7%BC%96%E8%A7%A3%E7%A0%81/><div class="card my-1"><div class="card-body py-2">&larr; Protobuf编解码</div></div></a><a class=ms-auto href=/blog/08%E9%87%8D%E8%A6%81%E7%9A%84%E9%9B%86%E7%BE%A4%E5%8F%82%E6%95%B0%E9%85%8D%E7%BD%AE%E4%B8%8B/><div class="card my-1"><div class="card-body py-2">08重要的集群参数配置 &rarr;</div></div></a></div></main></div></div></div><footer class="footer text-muted"><div class=container-xxl><div class=row><div class="col-lg-8 order-last order-lg-first"><ul class=list-inline><li class=list-inline-item>Powered by <a class=text-muted href=https://www.netlify.com/>Netlify</a>, <a class=text-muted href=https://gohugo.io/>Hugo</a>, and <a class=text-muted href=https://getdoks.org/>Doks</a></li></ul></div><div class="col-lg-8 order-first order-lg-last text-lg-end"><ul class=list-inline></ul></div><div class=col-lg-8 align=right><p><font size=-1>站点构建版本：v</font></p></div></div></div></footer><script src=/js/bootstrap.min.fdbe9b9ba88a036135318f3c721784d684ac9e3280fe282cc80d7d49f7f9c82780cd54228c1608685a230c09984300d7946fc471734d566fcebc148b65bd16db.js integrity="sha512-/b6bm6iKA2E1MY88cheE1oSsnjKA/igsyA19Sff5yCeAzVQijBYIaFojDAmYQwDXlG/EcXNNVm/OvBSLZb0W2w==" crossorigin=anonymous defer></script>
+<script src=/js/highlight.min.451fe6185924dcedf55c767559b5130f666f31c989f0078a75bafc346ad7364e180edfd731b1ca6bae0e90dfee88842885d284126ab0879f5067399e3a02b09e.js integrity="sha512-RR/mGFkk3O31XHZ1WbUTD2ZvMcmJ8AeKdbr8NGrXNk4YDt/XMbHKa64OkN/uiIQohdKEEmqwh59QZzmeOgKwng==" crossorigin=anonymous defer></script>
+<script src=/main.min.f16ffd9b364013a1df84be9cd7a45c470cb48639766bf5551e05bba845fe4ab150cb6436de43609bfed9af47c23bd5e395e9a10b932fa6fb2c4ee8f6cc78d7a3.js integrity="sha512-8W/9mzZAE6HfhL6c16RcRwy0hjl2a/VVHgW7qEX+SrFQy2Q23kNgm/7Zr0fCO9XjlemhC5MvpvssTuj2zHjXow==" crossorigin=anonymous defer></script>
+<script src=/index.min.4f5da6d5d5039814b7640914dc6d7af9b1826b54a2e8027123e345920f33e3dab6f98ed3b275444c8e3ce3de9faa12475d34fad04a0140d0a99b28e75bc5267c.js integrity="sha512-T12m1dUDmBS3ZAkU3G16+bGCa1Si6AJxI+NFkg8z49q2+Y7TsnVETI48496fqhJHXTT60EoBQNCpmyjnW8UmfA==" crossorigin=anonymous defer></script></body></html>

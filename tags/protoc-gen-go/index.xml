@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>protoc-gen-go on</title><link>/tags/protoc-gen-go/</link><description>Recent content in protoc-gen-go on</description><generator>Hugo -- gohugo.io</generator><language>en-US</language><lastBuildDate>Tue, 23 May 2017 16:29:25 +0800</lastBuildDate><atom:link href="/tags/protoc-gen-go/index.xml" rel="self" type="application/rss+xml"/><item><title>Protoc及其插件工作原理分析(精华版)</title><link>/blog/2017-05-23-protoc%E5%8F%8A%E6%8F%92%E4%BB%B6%E5%B7%A5%E4%BD%9C%E5%8E%9F%E7%90%86%E5%88%86%E6%9E%90%E7%B2%BE%E5%8D%8E%E7%89%88/</link><pubDate>Tue, 23 May 2017 16:29:25 +0800</pubDate><guid>/blog/2017-05-23-protoc%E5%8F%8A%E6%8F%92%E4%BB%B6%E5%B7%A5%E4%BD%9C%E5%8E%9F%E7%90%86%E5%88%86%E6%9E%90%E7%B2%BE%E5%8D%8E%E7%89%88/</guid><description>在进行protoc插件开发之前，首先要了解protoc的工作原理。protobuf具有诸多优点被广泛使用，由于protoc对proto文件的强大解析能力使我们可以更进一步来开发一些插件，通过插件快速生成特定于proto文件的工具类、配置文件等，从而提高开发效率。
+本文首先会介绍一下protoc的整体工作原理，然后详细介绍一下protoc对proto文件的解析过程，最后给出编写protoc插件来扩展protoc功能的一个示例（这里以protoc-gen-go插件为例）。
+1. protoc工作原理分析 # 1.0. protoc源代码准备 # 要想了解protoc的工作机制，查看其源代码了解其核心流程是最靠谱的方法。
+获取程序源代码的方式如下：
+git co https://github.com/google/protobuf 由于我们工程中常用的protoc版本是v2.5.0，所以这里检出对应版本的tag。
+git ck v2.5.0 考虑到可能会进行测试、修改、注释等学习过程，这里最好创建一个新的分支来操作。
+git branch -b ${new-branch-name} 现在源代码准备好了，下面可以阅读protoc的源码梳理一下其工作原理了。
+上述git检出后的protobuf路径，记为${protobuf}，后面如果出现${protobuf}请知晓其含义。如果在描述源代码时没有提及代码起始路径${protobuf}，那么起始路径均为${protobuf}。
+1.1. protoc执行流程说明 # protoc执行流程的相关源码，主要包括如下两个部分。
+1.1.1. protoc程序入口 # protoc程序入口为以下源文件main函数，该入口函数中完成protoc命令行接口初始化、编程语言及代码生成器注册后，调用cli.Run(argc,argv)解析proto文件并生成特定语言的源代码。
+file: src/google/protobuf/compiler/main.cc
+// Author: kenton@google.com (Kenton Varda) // 这个头文件定义了protoc的命令行接口 #include &amp;lt;google/protobuf/compiler/command_line_interface.h&amp;gt; // protoc中内置了对cpp、python、java语言的支持，对其他语言的支持需要以plugin的方式来支持 #include &amp;lt;google/protobuf/compiler/cpp/cpp_generator.h&amp;gt; #include &amp;lt;google/protobuf/compiler/python/python_generator.h&amp;gt; #include &amp;lt;google/protobuf/compiler/java/java_generator.h&amp;gt; int main(int argc, char* argv[]) { // 初始化protoc命令行接口并开启插件 // - 插件只是普通的可执行程序，其文件名以AllowPlugins参数protoc-开头 // - 假定protoc --foo_out，那么实际调用的插件是protoc-foo google::protobuf::compiler::CommandLineInterface cli; cli.</description></item><item><title>Protoc工作原理分析</title><link>/blog/2017-05-16-protoc%E5%B7%A5%E4%BD%9C%E5%8E%9F%E7%90%86/</link><pubDate>Fri, 19 May 2017 14:29:25 +0800</pubDate><guid>/blog/2017-05-16-protoc%E5%B7%A5%E4%BD%9C%E5%8E%9F%E7%90%86/</guid><description>在进行protoc插件开发之前，首先要了解protoc的工作原理。在protobuf的使用过程中，protoc作为proto文件的编译器，很多开发人员只会用但是不了解其工作原理，更不了解如何扩展其功能。protobuf作为目前常用的数据交换格式在协议开发中被广泛采用，此外，protoc对proto文件的强大解析能力使我们可以开发一些插件，通过插件快速生成特定于proto文件的工具类、配置文件等，从而提高开发效率。
+本文首先会介绍一下protoc的整体工作机制，然后解释一下protoc对proto文件的解析过程，最后给出编写protoc插件扩展protoc功能的一个示例教程。
+1. protoc源代码准备 # 要想了解protoc的工作机制，查看其源代码了解其核心流程是最靠谱的方法。
+获取程序源代码的方式如下：
+git co https://github.com/google/protobuf 由于我们工程中常用的protoc版本是v2.5.0，所以这里检出对应版本的tag。
+git ck v2.5.0 考虑到可能会进行测试、修改、注释等学习过程，这里最好创建一个新的分支来操作。
+git branch ${new-branch-name} git ck ${new-branch-name} 现在源代码准备好了，我比较喜欢使用vim、ctags、cscope来阅读源码，根据个人习惯吧，下面可以阅读protoc的源码梳理以下工作机制。
+2. protoc源码分析 # 上述git检出后的protobuf路径，记为${protobuf}，后面如果出现${protobuf}请知晓其含义。如果在描述源代码时没有提及起始路径${protobuf}，那么起始路径均为${protobuf}。
+2.1. protoc程序入口 # src/google/protobuf/compiler/main.cc中的main函数，为protoc的入口函数。
+file: src/google/protobuf/compiler/main.cc
+// Author: kenton@google.com (Kenton Varda) // 这个头文件定义了protoc的命令行接口 #include &amp;lt;google/protobuf/compiler/command_line_interface.h&amp;gt; // protoc中内置了对cpp、python、java语言的支持，对其他语言的支持需要以plugin的方式来支持 #include &amp;lt;google/protobuf/compiler/cpp/cpp_generator.h&amp;gt; #include &amp;lt;google/protobuf/compiler/python/python_generator.h&amp;gt; #include &amp;lt;google/protobuf/compiler/java/java_generator.h&amp;gt; int main(int argc, char* argv[]) { // 初始化protoc命令行接口并开启插件 // - 插件只是普通的可执行程序，其文件名以AllowPlugins参数protoc-开头 // - 假定protoc --foo_out，那么实际调用的插件是protoc-foo google::protobuf::compiler::CommandLineInterface cli; cli.AllowPlugins(&amp;quot;protoc-&amp;quot;); // Proto2 C++ (指定了--cpp_out将调用cpp::Generator) google::protobuf::compiler::cpp::CppGenerator cpp_generator; cli.</description></item></channel></rss>

@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>hermetic on</title><link>/tags/hermetic/</link><description>Recent content in hermetic on</description><generator>Hugo -- gohugo.io</generator><language>en-US</language><lastBuildDate>Thu, 21 Oct 2021 01:48:05 +0800</lastBuildDate><atom:link href="/tags/hermetic/index.xml" rel="self" type="application/rss+xml"/><item><title>bazelbuild：构建go微服务</title><link>/blog/2021-10-21-bazelbuild%E6%9E%84%E5%BB%BAgo%E5%BE%AE%E6%9C%8D%E5%8A%A1/</link><pubDate>Thu, 21 Oct 2021 01:48:05 +0800</pubDate><guid>/blog/2021-10-21-bazelbuild%E6%9E%84%E5%BB%BAgo%E5%BE%AE%E6%9C%8D%E5%8A%A1/</guid><description>img { width: 680px; padding-bottom: 1rem; } 1 前言 # 关于monorepo、multirepo的争论不绝于耳，至于采用哪种方式进行管理，要因地制宜地选择最合适的方案，要看到其优势，也要看到工具建设和迁移的成本。这里重点谈下各自的优势及什么时候适用Bazel构建。
+1.1 monorepo # 如果团队采用的是希望改善代码复用、希望让烂代码无处遁形、希望构建一致的CI/CD标准并落地、希望更好地沉淀经验、希望更好地促进团队成员成长等等，考虑到这些，似乎monorepo是更好的代码管理方式。
+但是也要考虑代码管理的规模、是否多语言技术栈、如何保证高效、封闭、可重复的构建。
+虽然google、uber、twitter等很多国内外大厂都采用了monorepo方式进行管理，但是也要看到这背后投入的大量的基础工具、平台的建设，这些并不是每个公司、团队所能予以支持的。目前开源的技术方案也并非完整的解决方案。
+谷歌为什么采用单仓：Why Google Stores Billions of Lines of Code in a Single Repository
+1.2 multirepo # multirepo每个仓库代码规模小，灵活易管理，做什么调整也很方便，也不需要特别重的基础工具、平台的支持，当然如果有大规模代码检索等之类的工具加成，也算锦上添花。
+对于小仓模式、大仓模式之争，微信同事曾经有专门做过一个具体的小仓模式实践分享。
+1.3 构建系统 # 这个世界就没有所谓的银弹，当我们企图用一种看似不错的方案解决问题时，这种方案本身也会重新引入一些新的问题。所以量体裁衣、因地制宜很重要，希望我们能结合自身情况（基础平台、工程素养现状、业务场景、业务迭代效率、产品定位等等）选择合适的方案。
+ps：我认为，monorepo的规模至少要做到部门及以上级别，否则真的就是费力不讨好。
+关于monorepo、multirepo的异同、优缺点这里就暂不讨论了，这里准备讨论下monorepo下的构建系统支持。
+go一般用go module构建，java一般用gradle或者maven构建，c++一般用cmake或makefile构建…总之有很多类似的构建方式，现在是多语言同一个repo管理，如果依然各个语言各自一套构建系统的话，随着代码规模上升，会变得很难管理。
+一个好的构建系统必须需要解决如下几个问题：
+- 如何建模待构建目标的依赖清单；
+- 如何实现高效地构建；
+- 如何保证可重复地构建；
+- 如何解决多语言构建问题；
+目前来看，从互联网大厂及开源社区的反馈来看，谷歌开源的bazel应该是当前的主流方案。
+2 Bazel基础 # 本文后续讨论建立在开发团队基于“monorepo+multi-language”的背景下，应该如何使用bazel对trpc-go项目进行构建。与此无关的内容不予以讨论。
+2.1 为什么用Bazel # - 代码管理方式：monorepo
+- repo中包含多种编程语言开发的projects；
+- 自定义rules、target来生成文件，如通过pb生成pb.go（不提交代码版本控制）；
+- 通过封闭构建，来保证可重复构建；
+- 希望能实现更细粒度的增量构建；</description></item></channel></rss>

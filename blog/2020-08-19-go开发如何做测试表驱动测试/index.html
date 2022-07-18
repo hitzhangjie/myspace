@@ -1,0 +1,270 @@
+<!doctype html><html lang=en-us><head><meta charset=utf-8><meta http-equiv=x-ua-compatible content="ie=edge"><meta name=viewport content="width=device-width,initial-scale=1,shrink-to-fit=no"><link rel=preload as=font href=/fonts/vendor/jost/jost-v4-latin-regular.woff2 type=font/woff2 crossorigin><link rel=preload as=font href=/fonts/vendor/jost/jost-v4-latin-500.woff2 type=font/woff2 crossorigin><link rel=preload as=font href=/fonts/vendor/jost/jost-v4-latin-700.woff2 type=font/woff2 crossorigin><link rel=stylesheet href=/main.63b6b8ff933309fcc94a30e21d69932290c8643fa1a32893f5681778c776ed3e51c237a1acd00b42426b3bf780c351b4a6ce75b3b659915ef0dd610b2e027a8c.css integrity="sha512-Y7a4/5MzCfzJSjDiHWmTIpDIZD+hoyiT9WgXeMd27T5RwjehrNALQkJrO/eAw1G0ps51s7ZZkV7w3WELLgJ6jA==" crossorigin=anonymous><noscript><style>img.lazyload{display:none}</style></noscript><meta name=robots content="index, follow"><meta name=googlebot content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1"><meta name=bingbot content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1"><title>go开发如何做测试：表驱动测试 - MySpace</title><meta name=description content="开发除了编写代码，也应该关注如何保证代码的可测试性，以及维护有效的测试用例。最近团队对单测要求不断提高，也将之前收集、积累的一点测试相关的内容记录分享下。本文转自Dave Cheney的表驱动测试一文，这篇文章写得挺好的。"><link rel=canonical href=/blog/2020-08-19-go%E5%BC%80%E5%8F%91%E5%A6%82%E4%BD%95%E5%81%9A%E6%B5%8B%E8%AF%95%E8%A1%A8%E9%A9%B1%E5%8A%A8%E6%B5%8B%E8%AF%95/><meta property="og:locale" content="en_US"><meta property="og:type" content="article"><meta property="og:title" content="go开发如何做测试：表驱动测试"><meta property="og:description" content="开发除了编写代码，也应该关注如何保证代码的可测试性，以及维护有效的测试用例。最近团队对单测要求不断提高，也将之前收集、积累的一点测试相关的内容记录分享下。本文转自Dave Cheney的表驱动测试一文，这篇文章写得挺好的。"><meta property="og:url" content="/blog/2020-08-19-go%E5%BC%80%E5%8F%91%E5%A6%82%E4%BD%95%E5%81%9A%E6%B5%8B%E8%AF%95%E8%A1%A8%E9%A9%B1%E5%8A%A8%E6%B5%8B%E8%AF%95/"><meta property="og:site_name" content="MySpace"><meta property="article:published_time" content="2020-08-19T00:36:19+08:00"><meta property="article:modified_time" content="2020-08-19T00:36:19+08:00"><meta property="og:image" content="/doks.png"><meta property="og:image:alt" content="MySpace"><meta name=twitter:card content="summary_large_image"><meta name=twitter:site content="@hitzhangjie"><meta name=twitter:creator content="@hitzhangjie"><meta name=twitter:title content="go开发如何做测试：表驱动测试"><meta name=twitter:description content="开发除了编写代码，也应该关注如何保证代码的可测试性，以及维护有效的测试用例。最近团队对单测要求不断提高，也将之前收集、积累的一点测试相关的内容记录分享下。本文转自Dave Cheney的表驱动测试一文，这篇文章写得挺好的。"><meta name=twitter:image content="/doks.png"><meta name=twitter:image:alt content="go开发如何做测试：表驱动测试"><script type=application/ld+json>{"@context":"https://schema.org","@graph":[{"@type":"Person","@id":"/#/schema/person/1","name":"","url":"/","sameAs":["https://twitter.com/hitzhangjie","https://www.linkedin.com/in/hitzhangjie/","https://github.com/hitzhangjie"],"image":{"@type":"ImageObject","@id":"/#/schema/image/1","url":"/\u003cnil\u003e","width":null,"height":null,"caption":""}},{"@type":"WebSite","@id":"/#/schema/website/1","url":"/","name":"MySpace","description":"MySpace is a hitzhangjie\u0027s personal space, for blogs, books, journey, thinkings.","publisher":{"@id":"/#/schema/person/1"}},{"@type":"WebPage","@id":"/blog/2020-08-19-go%E5%BC%80%E5%8F%91%E5%A6%82%E4%BD%95%E5%81%9A%E6%B5%8B%E8%AF%95%E8%A1%A8%E9%A9%B1%E5%8A%A8%E6%B5%8B%E8%AF%95/","url":"/blog/2020-08-19-go%E5%BC%80%E5%8F%91%E5%A6%82%E4%BD%95%E5%81%9A%E6%B5%8B%E8%AF%95%E8%A1%A8%E9%A9%B1%E5%8A%A8%E6%B5%8B%E8%AF%95/","name":"go开发如何做测试：表驱动测试","description":"开发除了编写代码，也应该关注如何保证代码的可测试性，以及维护有效的测试用例。最近团队对单测要求不断提高，也将之前收集、积累的一点测试相关的内容记录分享下。本文转自Dave Cheney的表驱动测试一文，这篇文章写得挺好的。","isPartOf":{"@id":"/#/schema/website/1"},"about":{"@id":"/#/schema/person/1"},"datePublished":"2020-08-19T00:36:19CET","dateModified":"2020-08-19T00:36:19CET","breadcrumb":{"@id":"/blog/2020-08-19-go%E5%BC%80%E5%8F%91%E5%A6%82%E4%BD%95%E5%81%9A%E6%B5%8B%E8%AF%95%E8%A1%A8%E9%A9%B1%E5%8A%A8%E6%B5%8B%E8%AF%95/#/schema/breadcrumb/1"},"primaryImageOfPage":{"@id":"/blog/2020-08-19-go%E5%BC%80%E5%8F%91%E5%A6%82%E4%BD%95%E5%81%9A%E6%B5%8B%E8%AF%95%E8%A1%A8%E9%A9%B1%E5%8A%A8%E6%B5%8B%E8%AF%95/#/schema/image/2"},"inLanguage":"","potentialAction":[{"@type":"ReadAction","target":["/blog/2020-08-19-go%E5%BC%80%E5%8F%91%E5%A6%82%E4%BD%95%E5%81%9A%E6%B5%8B%E8%AF%95%E8%A1%A8%E9%A9%B1%E5%8A%A8%E6%B5%8B%E8%AF%95/"]}]},{"@type":"BreadcrumbList","@id":"/blog/2020-08-19-go%E5%BC%80%E5%8F%91%E5%A6%82%E4%BD%95%E5%81%9A%E6%B5%8B%E8%AF%95%E8%A1%A8%E9%A9%B1%E5%8A%A8%E6%B5%8B%E8%AF%95/#/schema/breadcrumb/1","name":"Breadcrumbs","itemListElement":[{"@type":"ListItem","position":1,"item":{"@type":"WebPage","@id":"/","url":"/","name":"Home"}},{"@type":"ListItem","position":2,"item":{"@id":"/blog2020-08-19-go%E5%BC%80%E5%8F%91%E5%A6%82%E4%BD%95%E5%81%9A%E6%B5%8B%E8%AF%95%E8%A1%A8%E9%A9%B1%E5%8A%A8%E6%B5%8B%E8%AF%95/"}}]},{"@context":"https://schema.org","@graph":[{"@type":"Article","@id":"/#/schema/article/1","headline":"go开发如何做测试：表驱动测试","description":"开发除了编写代码，也应该关注如何保证代码的可测试性，以及维护有效的测试用例。最近团队对单测要求不断提高，也将之前收集、积累的一点测试相关的内容记录分享下。本文转自Dave Cheney的表驱动测试一文，这篇文章写得挺好的。","isPartOf":{"@id":"/blog/2020-08-19-go%E5%BC%80%E5%8F%91%E5%A6%82%E4%BD%95%E5%81%9A%E6%B5%8B%E8%AF%95%E8%A1%A8%E9%A9%B1%E5%8A%A8%E6%B5%8B%E8%AF%95/"},"mainEntityOfPage":{"@id":"/blog/2020-08-19-go%E5%BC%80%E5%8F%91%E5%A6%82%E4%BD%95%E5%81%9A%E6%B5%8B%E8%AF%95%E8%A1%A8%E9%A9%B1%E5%8A%A8%E6%B5%8B%E8%AF%95/"},"datePublished":"2020-08-19T00:36:19CET","dateModified":"2020-08-19T00:36:19CET","author":{"@id":"/#/schema/person/2"},"publisher":{"@id":"/#/schema/person/1"},"image":{"@id":"/blog/2020-08-19-go%E5%BC%80%E5%8F%91%E5%A6%82%E4%BD%95%E5%81%9A%E6%B5%8B%E8%AF%95%E8%A1%A8%E9%A9%B1%E5%8A%A8%E6%B5%8B%E8%AF%95/#/schema/image/2"}}]},{"@context":"https://schema.org","@graph":[{"@type":"Person","@id":"/#/schema/person/2","name":null,"sameAs":[]}]},{"@context":"https://schema.org","@graph":[{"@type":"ImageObject","@id":"/blog/2020-08-19-go%E5%BC%80%E5%8F%91%E5%A6%82%E4%BD%95%E5%81%9A%E6%B5%8B%E8%AF%95%E8%A1%A8%E9%A9%B1%E5%8A%A8%E6%B5%8B%E8%AF%95/#/schema/image/2","url":"/doks.png","contentUrl":"/doks.png","caption":"go开发如何做测试：表驱动测试"}]}]}</script><meta name=theme-color content="#fff"><link rel=icon href=/favicon.ico sizes=any><link rel=icon type=image/svg+xml href=/favicon.svg><link rel=apple-touch-icon sizes=180x180 href=/apple-touch-icon.png><link rel=icon type=image/png sizes=32x32 href=/favicon-32x32.png><link rel=icon type=image/png sizes=16x16 href=/favicon-16x16.png><link rel=manifest crossorigin=use-credentials href=/site.webmanifest><script type=text/javascript src="https://platform-api.sharethis.com/js/sharethis.js#property=607868a58d7101001829a8df&product=sop" async></script><style>[alt~=sharing]{border:0;box-shadow:none}div#st-1{text-align:unset}div#st-1 .st-btn{height:24px;padding:0 4px}div#st-1 .st-btn>img{top:4.2px}div#st-2 .st-btn{height:24px;padding:0 4px}div#st-2 .st-btn>img{top:4.2px}</style></head><body class="blog single"><div class=sticky-top><div class=header-bar></div><header class="navbar navbar-expand-lg navbar-light doks-navbar"><nav class="container-xxl flex-wrap flex-lg-nowrap" aria-label="Main navigation"><a class="navbar-brand order-0" href=/ aria-label=MySpace>MySpace</a>
+<button class="btn btn-menu order-2 d-block d-lg-none" type=button data-bs-toggle=offcanvas data-bs-target=#offcanvasDoks aria-controls=offcanvasDoks aria-label="Open main menu"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentcolor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-menu"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button><div class="offcanvas offcanvas-end border-0 py-lg-1" tabindex=-1 id=offcanvasDoks data-bs-backdrop=true aria-labelledby=offcanvasDoksLabel><div class="header-bar d-lg-none"></div><div class="offcanvas-header d-lg-none"><h2 class="h5 offcanvas-title ps-2" id=offcanvasDoksLabel><a class=text-dark href=/>MySpace</a></h2><button type=button class="btn-close text-reset me-2" data-bs-dismiss=offcanvas aria-label="Close main menu"></button></div><div class="offcanvas-body p-4 p-lg-0"><ul class="nav flex-column flex-lg-row align-items-lg-center mt-2 mt-lg-0 ms-lg-2 me-lg-auto"><li class=nav-item><a class="nav-link ps-0 py-1 active" href=/blog/>Blog</a></li><li class=nav-item><a class="nav-link ps-0 py-1" href=/books/>Books</a></li><li class=nav-item><a class="nav-link ps-0 py-1" href=/journey/introduction>Journey</a></li></ul><hr class="text-black-50 my-4 d-lg-none"><form class="doks-search position-relative flex-grow-1 ms-lg-auto me-lg-2"><input id=search class="form-control is-search" type=search placeholder="Search docs..." aria-label="Search docs..." autocomplete=off><div id=suggestions class="shadow bg-white rounded d-none"></div></form><hr class="text-black-50 my-4 d-lg-none"><ul class="nav flex-column flex-lg-row"><li class=nav-item><a class="nav-link social-link" href=https://twitter.com/hitzhangjie><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentcolor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-twitter"><path d="M23 3a10.9 10.9.0 01-3.14 1.53 4.48 4.48.0 00-7.86 3v1A10.66 10.66.0 013 4s-4 9 5 13a11.64 11.64.0 01-7 2c9 5 20 0 20-11.5a4.5 4.5.0 00-.08-.83A7.72 7.72.0 0023 3z"/></svg><small class="ms-2 d-lg-none">Twitter</small></a></li><li class=nav-item><a class="nav-link social-link" href=https://github.com/hitzhangjie><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentcolor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-github"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37.0 00-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44.0 0020 4.77 5.07 5.07.0 0019.91 1S18.73.65 16 2.48a13.38 13.38.0 00-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07.0 005 4.77 5.44 5.44.0 003.5 8.55c0 5.42 3.3 6.61 6.44 7A3.37 3.37.0 009 18.13V22"/></svg><small class="ms-2 d-lg-none">GitHub</small></a></li></ul></div></div></nav></header></div><div class="wrap container-xxl" role=document><div class=content><div class="row flex-xl-nowrap"><div class="col-lg-5 col-xl-4 docs-sidebar"><nav class=docs-links aria-label="Main navigation"><h3>Tag List</h3><ol><li><a href=/tags/go/>go</a></li><li><a href=/tags/test/>test</a></li><li><a href=/tags/gotest/>gotest</a></li></ol></nav></div><nav class="docs-toc d-none d-xl-block col-xl-3" aria-label="Secondary navigation"><div class=page-links><h3>On this page</h3><nav id=TableOfContents><ul><li><a href=#prefer-table-driven-tests>Prefer table driven tests</a><ul><li><a href=#code-coverage>Code coverage</a><ul><li><a href=#spray-some-bashrc-on-that>Spray some .bashrc on that</a></li></ul></li><li><a href=#going-beyond-100-coverage>Going beyond 100% coverage</a></li><li><a href=#introducing-table-driven-tests>Introducing table driven tests</a></li><li><a href=#enumerating-test-cases>Enumerating test cases</a></li><li><a href=#give-your-test-cases-names>Give your test cases names</a></li><li><a href=#introducing-sub-tests>Introducing sub tests</a><ul><li><a href=#individual-sub-test-cases-can-be-executed-directly>Individual sub test cases can be executed directly</a></li></ul></li><li><a href=#comparing-what-we-got-with-what-we-wanted>Comparing what we got with what we wanted</a><ul><li><a href=#related-posts>Related Posts:</a></li></ul></li></ul></li></ul></nav></div></nav><main class="docs-content col-lg-11 col-xl-9"><h1>go开发如何做测试：表驱动测试</h1><div style=display:flex><div>分享:&nbsp;&nbsp;</div><div><div class=sharethis-inline-share-buttons></div></div></div><hr><p class=lead></p><p>开发除了编写代码，也应该关注如何保证代码的可测试性，以及维护有效的测试用例。最近团队对单测要求不断提高，也将之前收集、积累的一点测试相关的内容记录分享下。本文转自Dave Cheney的表驱动测试一文，这篇文章写得挺好的。</p><h1 id=prefer-table-driven-tests>Prefer table driven tests <a href=#prefer-table-driven-tests class=anchor aria-hidden=true>#</a></h1><p>I’m a big fan of testing, specifically <a href=https://dave.cheney.net/2019/04/03/absolute-unit-test>unit testing</a> and TDD (<a href="https://www.youtube.com/watch?v=EZ05e7EMOLM">done correctly</a>, of course). A practice that has grown around Go projects is the idea of a table driven test. This post explores the how and why of writing a table driven test.</p><p>Let’s say we have a function that splits strings:</p><pre><code>// Split slices s into all substrings separated by sep and
+// returns a slice of the substrings between those separators.
+func Split(s, sep string) []string {
+    var result []string
+    i := strings.Index(s, sep)
+    for i &gt; -1 {
+        result = append(result, s[:i])
+        s = s[i+len(sep):]
+        i = strings.Index(s, sep)
+    }
+    return append(result, s)
+}
+</code></pre><p>In Go, unit tests are just regular Go functions (with a few rules) so we write a unit test for this function starting with a file in the same directory, with the same package name, <code>strings</code>.</p><pre><code>package split
+
+import (
+    &quot;reflect&quot;
+    &quot;testing&quot;
+)
+
+func TestSplit(t *testing.T) {
+    got := Split(&quot;a/b/c&quot;, &quot;/&quot;)
+    want := []string{&quot;a&quot;, &quot;b&quot;, &quot;c&quot;}
+    if !reflect.DeepEqual(want, got) {
+         t.Fatalf(&quot;expected: %v, got: %v&quot;, want, got)
+    }
+}
+</code></pre><p>Tests are just regular Go functions with a few rules:</p><ol><li>The name of the test function must start with <code>Test</code>.</li><li>The test function must take one argument of type <code>*testing.T</code>. A <code>*testing.T</code> is a type injected by the testing package itself, to provide ways to print, skip, and fail the test.</li></ol><p>In our test we call <code>Split</code> with some inputs, then compare it to the result we expected.</p><h2 id=code-coverage>Code coverage <a href=#code-coverage class=anchor aria-hidden=true>#</a><a href=#code-coverage class=anchor aria-hidden=true>#</a></h2><p>The next question is, what is the coverage of this package? Luckily the go tool has a built in branch coverage. We can invoke it like this:</p><pre><code>% go test -coverprofile=c.out
+PASS
+coverage: 100.0% of statements
+ok      split   0.010s
+</code></pre><p>Which tells us we have 100% branch coverage, which isn’t really surprising, there’s only one branch in this code.</p><p>If we want to dig in to the coverage report the go tool has several options to print the coverage report. We can use <code>go tool cover -func</code> to break down the coverage per function:</p><pre><code>% go tool cover -func=c.out
+split/split.go:8:       Split          100.0%
+total:                  (statements)   100.0%
+</code></pre><p>Which isn’t that exciting as we only have one function in this package, but I’m sure you’ll find more exciting packages to test.</p><h3 id=spray-some-bashrc-on-that>Spray some .bashrc on that <a href=#spray-some-bashrc-on-that class=anchor aria-hidden=true>#</a><a href=#spray-some-bashrc-on-that class=anchor aria-hidden=true>#</a></h3><p>This pair of commands is so useful for me I have a shell alias which runs the test coverage and the report in one command:</p><pre><code>cover () {
+    local t=$(mktemp -t cover)
+    go test $COVERFLAGS -coverprofile=$t $@ \
+        &amp;&amp; go tool cover -func=$t \
+        &amp;&amp; unlink $t
+}
+</code></pre><h2 id=going-beyond-100-coverage>Going beyond 100% coverage <a href=#going-beyond-100-coverage class=anchor aria-hidden=true>#</a><a href=#going-beyond-100-coverage class=anchor aria-hidden=true>#</a></h2><p>So, we wrote one test case, got 100% coverage, but this isn’t really the end of the story. We have good branch coverage but we probably need to test some of the boundary conditions. For example, what happens if we try to split it on comma?</p><pre><code>func TestSplitWrongSep(t *testing.T) {
+    got := Split(&quot;a/b/c&quot;, &quot;,&quot;)
+    want := []string{&quot;a/b/c&quot;}
+    if !reflect.DeepEqual(want, got) {
+        t.Fatalf(&quot;expected: %v, got: %v&quot;, want, got)
+    }
+}
+</code></pre><p>Or, what happens if there are no separators in the source string?</p><pre><code>func TestSplitNoSep(t *testing.T) {
+    got := Split(&quot;abc&quot;, &quot;/&quot;)
+    want := []string{&quot;abc&quot;}
+    if !reflect.DeepEqual(want, got) {
+        t.Fatalf(&quot;expected: %v, got: %v&quot;, want, got)
+    }
+}
+</code></pre><p>We’re starting build a set of test cases that exercise boundary conditions. This is good.</p><h2 id=introducing-table-driven-tests>Introducing table driven tests <a href=#introducing-table-driven-tests class=anchor aria-hidden=true>#</a><a href=#introducing-table-driven-tests class=anchor aria-hidden=true>#</a></h2><p>However the there is a lot of duplication in our tests. For each test case only the input, the expected output, and name of the test case change. Everything else is boilerplate. What we’d like to to set up all the inputs and expected outputs and feel them to a single test harness. This is a great time to introduce table driven testing.</p><pre><code>func TestSplit(t *testing.T) {
+    type test struct {
+        input string
+        sep   string
+        want  []string
+    }
+
+    tests := []test{
+        {input: &quot;a/b/c&quot;, sep: &quot;/&quot;, want: []string{&quot;a&quot;, &quot;b&quot;, &quot;c&quot;}},
+        {input: &quot;a/b/c&quot;, sep: &quot;,&quot;, want: []string{&quot;a/b/c&quot;}},
+        {input: &quot;abc&quot;, sep: &quot;/&quot;, want: []string{&quot;abc&quot;}},
+    }
+
+    for _, tc := range tests {
+        got := Split(tc.input, tc.sep)
+        if !reflect.DeepEqual(tc.want, got) {
+            t.Fatalf(&quot;expected: %v, got: %v&quot;, tc.want, got)
+        }
+    }
+}
+</code></pre><p>We declare a structure to hold our test inputs and expected outputs. This is our table. The <code>tests</code> structure is usually a local declaration because we want to reuse this name for other tests in this package.</p><p>In fact, we don’t even need to give the type a name, we can use an anonymous struct literal to reduce the boilerplate like this:</p><pre><code>func TestSplit(t *testing.T) {
+    tests := []struct {
+        input string
+        sep   string
+        want  []string
+    }{
+        {input: &quot;a/b/c&quot;, sep: &quot;/&quot;, want: []string{&quot;a&quot;, &quot;b&quot;, &quot;c&quot;}},
+        {input: &quot;a/b/c&quot;, sep: &quot;,&quot;, want: []string{&quot;a/b/c&quot;}},
+        {input: &quot;abc&quot;, sep: &quot;/&quot;, want: []string{&quot;abc&quot;}},
+    } 
+
+    for _, tc := range tests {
+        got := Split(tc.input, tc.sep)
+        if !reflect.DeepEqual(tc.want, got) {
+            t.Fatalf(&quot;expected: %v, got: %v&quot;, tc.want, got)
+        }
+    }
+}
+</code></pre><p>Now, adding a new test is a straight forward matter; simply add another line the <code>tests</code> structure. For example, what will happen if our input string has a trailing separator?</p><pre><code>{input: &quot;a/b/c&quot;, sep: &quot;/&quot;, want: []string{&quot;a&quot;, &quot;b&quot;, &quot;c&quot;}},
+{input: &quot;a/b/c&quot;, sep: &quot;,&quot;, want: []string{&quot;a/b/c&quot;}},
+{input: &quot;abc&quot;, sep: &quot;/&quot;, want: []string{&quot;abc&quot;}},
+{input: &quot;a/b/c/&quot;, sep: &quot;/&quot;, want: []string{&quot;a&quot;, &quot;b&quot;, &quot;c&quot;}}, // trailing sep
+</code></pre><p>But, when we run <code>go test</code>, we get</p><pre><code>% go test
+--- FAIL: TestSplit (0.00s)
+    split_test.go:24: expected: [a b c], got: [a b c ]
+</code></pre><p>Putting aside the test failure, there are a few problems to talk about.</p><p>The first is by rewriting each test from a function to a row in a table we’ve lost the name of the failing test. We added a comment in the test file to call out this case, but we don’t have access to that comment in the <code>go test</code> output.</p><p>There are a few ways to resolve this. You’ll see a mix of styles in use in Go code bases because the table testing idiom is evolving as people continue to experiment with the form.</p><h2 id=enumerating-test-cases>Enumerating test cases <a href=#enumerating-test-cases class=anchor aria-hidden=true>#</a><a href=#enumerating-test-cases class=anchor aria-hidden=true>#</a></h2><p>As tests are stored in a slice we can print out the index of the test case in the failure message:</p><pre><code>func TestSplit(t *testing.T) {
+    tests := []struct {
+        input string
+        sep . string
+        want  []string
+    }{
+        {input: &quot;a/b/c&quot;, sep: &quot;/&quot;, want: []string{&quot;a&quot;, &quot;b&quot;, &quot;c&quot;}},
+        {input: &quot;a/b/c&quot;, sep: &quot;,&quot;, want: []string{&quot;a/b/c&quot;}},
+        {input: &quot;abc&quot;, sep: &quot;/&quot;, want: []string{&quot;abc&quot;}},
+        {input: &quot;a/b/c/&quot;, sep: &quot;/&quot;, want: []string{&quot;a&quot;, &quot;b&quot;, &quot;c&quot;}},
+    }
+
+    for i, tc := range tests {
+        got := Split(tc.input, tc.sep)
+        if !reflect.DeepEqual(tc.want, got) {
+            t.Fatalf(&quot;test %d: expected: %v, got: %v&quot;, i+1, tc.want, got)
+        }
+    }
+}
+</code></pre><p>Now when we run <code>go test</code> we get this</p><pre><code>% go test
+--- FAIL: TestSplit (0.00s)
+    split_test.go:24: test 4: expected: [a b c], got: [a b c ]
+</code></pre><p>Which is a little better. Now we know that the fourth test is failing, although we have to do a little bit of fudging because slice indexing—and range iteration—is zero based. This requires consistency across your test cases; if some use zero base reporting and others use one based, it’s going to be confusing. And, if the list of test cases is long, it could be difficult to count braces to figure out exactly which fixture constitutes test case number four.</p><h2 id=give-your-test-cases-names>Give your test cases names <a href=#give-your-test-cases-names class=anchor aria-hidden=true>#</a><a href=#give-your-test-cases-names class=anchor aria-hidden=true>#</a></h2><p>Another common pattern is to include a name field in the test fixture.</p><pre><code>func TestSplit(t *testing.T) {
+    tests := []struct {
+        name  string
+        input string
+        sep   string
+        want  []string
+    }{
+        {name: &quot;simple&quot;, input: &quot;a/b/c&quot;, sep: &quot;/&quot;, want: []string{&quot;a&quot;, &quot;b&quot;, &quot;c&quot;}},
+        {name: &quot;wrong sep&quot;, input: &quot;a/b/c&quot;, sep: &quot;,&quot;, want: []string{&quot;a/b/c&quot;}},
+        {name: &quot;no sep&quot;, input: &quot;abc&quot;, sep: &quot;/&quot;, want: []string{&quot;abc&quot;}},
+        {name: &quot;trailing sep&quot;, input: &quot;a/b/c/&quot;, sep: &quot;/&quot;, want: []string{&quot;a&quot;, &quot;b&quot;, &quot;c&quot;}},
+    }
+
+    for _, tc := range tests {
+        got := Split(tc.input, tc.sep)
+        if !reflect.DeepEqual(tc.want, got) {
+            t.Fatalf(&quot;%s: expected: %v, got: %v&quot;, tc.name, tc.want, got)
+        }
+    }
+}
+</code></pre><p>Now when the test fails we have a descriptive name for what the test was doing. We no longer have to try to figure it out from the output—also, now have a string we can search on.</p><pre><code>% go test
+--- FAIL: TestSplit (0.00s)
+    split_test.go:25: trailing sep: expected: [a b c], got: [a b c ]
+</code></pre><p>We can dry this up even more using a map literal syntax:</p><pre><code>func TestSplit(t *testing.T) {
+    tests := map[string]struct {
+        input string
+        sep   string
+        want  []string
+    }{ 
+        &quot;simple&quot;:       {input: &quot;a/b/c&quot;, sep: &quot;/&quot;, want: []string{&quot;a&quot;, &quot;b&quot;, &quot;c&quot;}}, 
+        &quot;wrong sep&quot;:    {input: &quot;a/b/c&quot;, sep: &quot;,&quot;, want: []string{&quot;a/b/c&quot;}},
+        &quot;no sep&quot;:       {input: &quot;abc&quot;, sep: &quot;/&quot;, want: []string{&quot;abc&quot;}},
+        &quot;trailing sep&quot;: {input: &quot;a/b/c/&quot;, sep: &quot;/&quot;, want: []string{&quot;a&quot;, &quot;b&quot;, &quot;c&quot;}},
+    }
+
+    for name, tc := range tests {
+        got := Split(tc.input, tc.sep)
+        if !reflect.DeepEqual(tc.want, got) {
+            t.Fatalf(&quot;%s: expected: %v, got: %v&quot;, name, tc.want, got)
+        }
+    }
+}
+</code></pre><p>Using a map literal syntax we define our test cases not as a slice of structs, but as map of test names to test fixtures. There’s also a side benefit of using a map that is going to potentially improve the utility of our tests.</p><p>Map iteration order is <em>undefined</em> <a href=https://dave.cheney.net/2019/05/07/prefer-table-driven-tests#easy-footnote-bottom-1-3620>1</a> This means each time we run <code>go test</code>, our tests are going to be potentially run in a different order.</p><p>This is super useful for spotting conditions where test pass when run in statement order, but not otherwise. If you find that happens you probably have some global state that is being mutated by one test with subsequent tests depending on that modification.</p><h2 id=introducing-sub-tests>Introducing sub tests <a href=#introducing-sub-tests class=anchor aria-hidden=true>#</a><a href=#introducing-sub-tests class=anchor aria-hidden=true>#</a></h2><p>Before we fix the failing test there are a few other issues to address in our table driven test harness.</p><p>The first is we’re calling <code>t.Fatalf</code> when one of the test cases fails. This means after the first failing test case we stop testing the other cases. Because test cases are run in an undefined order, if there is a test failure, it would be nice to know if it was the only failure or just the first.</p><p>The testing package would do this for us if we go to the effort to write out each test case as its own function, but that’s quite verbose. The good news is since Go 1.7 a new feature was added that lets us do this easily for table driven tests. They’re called <a href=https://blog.golang.org/subtests>sub tests</a>.</p><pre><code>func TestSplit(t *testing.T) {
+    tests := map[string]struct {
+        input string
+        sep   string
+        want  []string
+    }{
+        &quot;simple&quot;:       {input: &quot;a/b/c&quot;, sep: &quot;/&quot;, want: []string{&quot;a&quot;, &quot;b&quot;, &quot;c&quot;}},
+        &quot;wrong sep&quot;:    {input: &quot;a/b/c&quot;, sep: &quot;,&quot;, want: []string{&quot;a/b/c&quot;}},
+        &quot;no sep&quot;:       {input: &quot;abc&quot;, sep: &quot;/&quot;, want: []string{&quot;abc&quot;}},
+        &quot;trailing sep&quot;: {input: &quot;a/b/c/&quot;, sep: &quot;/&quot;, want: []string{&quot;a&quot;, &quot;b&quot;, &quot;c&quot;}},
+    }
+
+    for name, tc := range tests {
+        t.Run(name, func(t *testing.T) {
+            got := Split(tc.input, tc.sep)
+            if !reflect.DeepEqual(tc.want, got) {
+                t.Fatalf(&quot;expected: %v, got: %v&quot;, tc.want, got)
+            }
+        })
+    }
+}
+</code></pre><p>As each sub test now has a name we get that name automatically printed out in any test runs.</p><pre><code>% go test
+--- FAIL: TestSplit (0.00s)
+    --- FAIL: TestSplit/trailing_sep (0.00s)
+        split_test.go:25: expected: [a b c], got: [a b c ]
+</code></pre><p>Each subtest is its own anonymous function, therefore we can use <code>t.Fatalf</code>, <code>t.Skipf</code>, and all the other <code>testing.T</code>helpers, while retaining the compactness of a table driven test.</p><h3 id=individual-sub-test-cases-can-be-executed-directly>Individual sub test cases can be executed directly <a href=#individual-sub-test-cases-can-be-executed-directly class=anchor aria-hidden=true>#</a><a href=#individual-sub-test-cases-can-be-executed-directly class=anchor aria-hidden=true>#</a></h3><p>Because sub tests have a name, you can run a selection of sub tests by name using the <code>go test -run</code> flag.</p><pre><code>% go test -run=.*/trailing -v
+=== RUN   TestSplit
+=== RUN   TestSplit/trailing_sep
+--- FAIL: TestSplit (0.00s)
+    --- FAIL: TestSplit/trailing_sep (0.00s)
+        split_test.go:25: expected: [a b c], got: [a b c ]
+</code></pre><h2 id=comparing-what-we-got-with-what-we-wanted>Comparing what we got with what we wanted <a href=#comparing-what-we-got-with-what-we-wanted class=anchor aria-hidden=true>#</a><a href=#comparing-what-we-got-with-what-we-wanted class=anchor aria-hidden=true>#</a></h2><p>Now we’re ready to fix the test case. Let’s look at the error.</p><pre><code>--- FAIL: TestSplit (0.00s)
+    --- FAIL: TestSplit/trailing_sep (0.00s)
+        split_test.go:25: expected: [a b c], got: [a b c ]
+</code></pre><p>Can you spot the problem? Clearly the slices are different, that’s what <code>reflect.DeepEqual</code> is upset about. But spotting the actual difference isn’t easy, you have to spot that extra space after <code>c</code>. This might look simple in this simple example, but it is any thing but when you’re comparing two complicated deeply nested gRPC structures.</p><p>We can improve the output if we switch to the <code>%#v</code> syntax to view the value as a Go(ish) declaration:</p><pre><code>got := Split(tc.input, tc.sep)
+if !reflect.DeepEqual(tc.want, got) {
+    t.Fatalf(&quot;expected: %#v, got: %#v&quot;, tc.want, got)
+}
+</code></pre><p>Now when we run our test it’s clear that the problem is there is an extra blank element in the slice.</p><pre><code>% go test
+--- FAIL: TestSplit (0.00s)
+    --- FAIL: TestSplit/trailing_sep (0.00s)
+        split_test.go:25: expected: []string{&quot;a&quot;, &quot;b&quot;, &quot;c&quot;}, got: []string{&quot;a&quot;, &quot;b&quot;, &quot;c&quot;, &quot;&quot;}
+</code></pre><p>But before we go to fix our test failure I want to talk a little bit more about choosing the right way to present test failures. Our <code>Split</code> function is simple, it takes a primitive string and returns a slice of strings, but what if it worked with structs, or worse, pointers to structs?</p><p>Here is an example where <code>%#v</code> does not work as well:</p><pre><code>func main() {
+    type T struct {
+        I int
+    }
+    x := []*T{{1}, {2}, {3}}
+    y := []*T{{1}, {2}, {4}}
+    fmt.Printf(&quot;%v %v\n&quot;, x, y)
+    fmt.Printf(&quot;%#v %#v\n&quot;, x, y)
+}
+</code></pre><p>The first <code>fmt.Printf</code>prints the unhelpful, but expected slice of addresses; <code>[0xc000096000 0xc000096008 0xc000096010] [0xc000096018 0xc000096020 0xc000096028]</code>. However our <code>%#v</code> version doesn’t fare any better, printing a slice of addresses cast to <code>*main.T</code>;<code>[]*main.T{(*main.T)(0xc000096000), (*main.T)(0xc000096008), (*main.T)(0xc000096010)} []*main.T{(*main.T)(0xc000096018), (*main.T)(0xc000096020), (*main.T)(0xc000096028)}</code></p><p>Because of the limitations in using any <code>fmt.Printf</code> verb, I want to introduce the <a href=https://github.com/google/go-cmp>go-cmp</a> library from Google.</p><p>The goal of the cmp library is it is specifically to compare two values. This is similar to <code>reflect.DeepEqual</code>, but it has more capabilities. Using the cmp pacakge you can, of course, write:</p><pre><code>func main() {
+    type T struct {
+        I int
+    }
+    x := []*T{{1}, {2}, {3}}
+    y := []*T{{1}, {2}, {4}}
+    fmt.Println(cmp.Equal(x, y)) // false
+}
+</code></pre><p>But far more useful for us with our test function is the <code>cmp.Diff</code> function which will produce a textual description of what is different between the two values, recursively.</p><pre><code>func main() {
+    type T struct {
+        I int
+    }
+    x := []*T{{1}, {2}, {3}}
+    y := []*T{{1}, {2}, {4}}
+    diff := cmp.Diff(x, y)
+    fmt.Printf(diff)
+}
+</code></pre><p>Which instead produces:</p><pre><code>% go run
+{[]*main.T}[2].I:
+         -: 3
+         +: 4
+</code></pre><p>Telling us that at element 2 of the slice of <code>T</code>s the <code>I</code>field was expected to be 3, but was actually 4.</p><p>Putting this all together we have our table driven go-cmp test</p><pre><code>func TestSplit(t *testing.T) {
+    tests := map[string]struct {
+        input string
+        sep   string
+        want  []string
+    }{
+        &quot;simple&quot;:       {input: &quot;a/b/c&quot;, sep: &quot;/&quot;, want: []string{&quot;a&quot;, &quot;b&quot;, &quot;c&quot;}},
+        &quot;wrong sep&quot;:    {input: &quot;a/b/c&quot;, sep: &quot;,&quot;, want: []string{&quot;a/b/c&quot;}},
+        &quot;no sep&quot;:       {input: &quot;abc&quot;, sep: &quot;/&quot;, want: []string{&quot;abc&quot;}},
+        &quot;trailing sep&quot;: {input: &quot;a/b/c/&quot;, sep: &quot;/&quot;, want: []string{&quot;a&quot;, &quot;b&quot;, &quot;c&quot;}},
+    }
+
+    for name, tc := range tests {
+        t.Run(name, func(t *testing.T) {
+            got := Split(tc.input, tc.sep)
+            diff := cmp.Diff(tc.want, got)
+            if diff != &quot;&quot; {
+                t.Fatalf(diff)
+            }
+        })
+    }
+}
+</code></pre><p>Running this we get</p><pre><code>% go test
+--- FAIL: TestSplit (0.00s)
+    --- FAIL: TestSplit/trailing_sep (0.00s)
+        split_test.go:27: {[]string}[?-&gt;3]:
+                -: &lt;non-existent&gt;
+                +: &quot;&quot;
+FAIL
+exit status 1
+FAIL    split   0.006s
+</code></pre><p>Using <code>cmp.Diff</code> our test harness isn’t just telling us that what we got and what we wanted were different. Our test is telling us that the strings are different lengths, the third index in the fixture shouldn’t exist, but the actual output we got an empty string, “”. From here fixing the test failure is straight forward.</p><ol><li>Please don’t email me to argue that map iteration order is <em>random</em>. <a href=https://golang.org/ref/spec#For_statements>It’s not</a>.</li></ol><h3 id=related-posts>Related Posts: <a href=#related-posts class=anchor aria-hidden=true>#</a><a href=#related-posts class=anchor aria-hidden=true>#</a></h3><ol><li><a href=https://dave.cheney.net/2013/06/09/writing-table-driven-tests-in-go>Writing table driven tests in Go</a></li><li><a href=https://dave.cheney.net/2018/10/15/internets-of-interest-7-ian-cooper-on-test-driven-development>Internets of Interest #7: Ian Cooper on Test Driven Development</a></li><li><a href=https://dave.cheney.net/2016/06/21/automatically-run-your-packages-tests-with-inotifywait>Automatically run your package’s tests with inotifywait</a></li><li><a href=https://dave.cheney.net/2013/06/30/how-to-write-benchmarks-in-go>How to write benchmarks in Go</a></li></ol><p>This entry was posted in <a href=https://dave.cheney.net/category/golang>Go</a>, <a href=https://dave.cheney.net/category/programming-2>Programming</a> and tagged <a href=https://dave.cheney.net/tag/testing>testing</a>, <a href=https://dave.cheney.net/tag/unit-test>unit test</a> on <a href=https://dave.cheney.net/2019/05/07/prefer-table-driven-tests>May 7, 2019</a>.</p><div class=edit-page><a href=https://github.com/hitzhangjie/myspace/blob/master/content/blog/2020-08-19-go%e5%bc%80%e5%8f%91%e5%a6%82%e4%bd%95%e5%81%9a%e6%b5%8b%e8%af%95%ef%bc%9a%e8%a1%a8%e9%a9%b1%e5%8a%a8%e6%b5%8b%e8%af%95.md><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentcolor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-edit-2"><path d="M17 3a2.828 2.828.0 114 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>Edit this page on GitHub</a></div><div class="docs-navigation d-flex justify-content-between"><a href=/blog/2020-08-19-go%E5%BC%80%E5%8F%91%E5%A6%82%E4%BD%95%E5%81%9A%E6%B5%8B%E8%AF%95%E9%80%89%E6%8B%A9%E5%90%88%E9%80%82%E7%9A%84%E6%B5%8B%E8%AF%95%E6%A1%86%E6%9E%B6/><div class="card my-1"><div class="card-body py-2">&larr; 选择合适的测试框架</div></div></a><a class=ms-auto href=/blog/2020-08-13-%E9%AA%91%E8%87%AA%E8%A1%8C%E8%BD%A6%E4%B8%80%E7%82%B9%E9%83%BD%E4%B8%8D%E8%88%92%E6%9C%8D%E4%BD%86%E6%98%AF%E5%BE%88%E7%88%BD/><div class="card my-1"><div class="card-body py-2">骑自行车一点都不舒服，但是很爽 &rarr;</div></div></a></div></main></div></div></div><footer class="footer text-muted"><div class=container-xxl><div class=row><div class="col-lg-8 order-last order-lg-first"><ul class=list-inline><li class=list-inline-item>Powered by <a class=text-muted href=https://www.netlify.com/>Netlify</a>, <a class=text-muted href=https://gohugo.io/>Hugo</a>, and <a class=text-muted href=https://getdoks.org/>Doks</a></li></ul></div><div class="col-lg-8 order-first order-lg-last text-lg-end"><ul class=list-inline></ul></div><div class=col-lg-8 align=right><p><font size=-1>站点构建版本：v</font></p></div></div></div></footer><script src=/js/bootstrap.min.fdbe9b9ba88a036135318f3c721784d684ac9e3280fe282cc80d7d49f7f9c82780cd54228c1608685a230c09984300d7946fc471734d566fcebc148b65bd16db.js integrity="sha512-/b6bm6iKA2E1MY88cheE1oSsnjKA/igsyA19Sff5yCeAzVQijBYIaFojDAmYQwDXlG/EcXNNVm/OvBSLZb0W2w==" crossorigin=anonymous defer></script>
+<script src=/js/highlight.min.451fe6185924dcedf55c767559b5130f666f31c989f0078a75bafc346ad7364e180edfd731b1ca6bae0e90dfee88842885d284126ab0879f5067399e3a02b09e.js integrity="sha512-RR/mGFkk3O31XHZ1WbUTD2ZvMcmJ8AeKdbr8NGrXNk4YDt/XMbHKa64OkN/uiIQohdKEEmqwh59QZzmeOgKwng==" crossorigin=anonymous defer></script>
+<script src=/main.min.f16ffd9b364013a1df84be9cd7a45c470cb48639766bf5551e05bba845fe4ab150cb6436de43609bfed9af47c23bd5e395e9a10b932fa6fb2c4ee8f6cc78d7a3.js integrity="sha512-8W/9mzZAE6HfhL6c16RcRwy0hjl2a/VVHgW7qEX+SrFQy2Q23kNgm/7Zr0fCO9XjlemhC5MvpvssTuj2zHjXow==" crossorigin=anonymous defer></script>
+<script src=/index.min.4f5da6d5d5039814b7640914dc6d7af9b1826b54a2e8027123e345920f33e3dab6f98ed3b275444c8e3ce3de9faa12475d34fad04a0140d0a99b28e75bc5267c.js integrity="sha512-T12m1dUDmBS3ZAkU3G16+bGCa1Si6AJxI+NFkg8z49q2+Y7TsnVETI48496fqhJHXTT60EoBQNCpmyjnW8UmfA==" crossorigin=anonymous defer></script></body></html>

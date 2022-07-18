@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>kafka核心技术与实战 on</title><link>/categories/kafka%E6%A0%B8%E5%BF%83%E6%8A%80%E6%9C%AF%E4%B8%8E%E5%AE%9E%E6%88%98/</link><description>Recent content in kafka核心技术与实战 on</description><generator>Hugo -- gohugo.io</generator><language>en-US</language><lastBuildDate>Tue, 27 Apr 2021 11:50:00 +0800</lastBuildDate><atom:link href="/categories/kafka%E6%A0%B8%E5%BF%83%E6%8A%80%E6%9C%AF%E4%B8%8E%E5%AE%9E%E6%88%98/index.xml" rel="self" type="application/rss+xml"/><item><title>07重要的集群参数配置</title><link>/blog/07%E9%87%8D%E8%A6%81%E7%9A%84%E9%9B%86%E7%BE%A4%E5%8F%82%E6%95%B0%E9%85%8D%E7%BD%AE%E4%B8%8A/</link><pubDate>Tue, 27 Apr 2021 11:50:00 +0800</pubDate><guid>/blog/07%E9%87%8D%E8%A6%81%E7%9A%84%E9%9B%86%E7%BE%A4%E5%8F%82%E6%95%B0%E9%85%8D%E7%BD%AE%E4%B8%8A/</guid><description>略，感兴趣可以参考：https://time.geekbang.org/column/article/101171</description></item><item><title>06kafka线上集群部署方案怎么做</title><link>/blog/06kafka%E7%BA%BF%E4%B8%8A%E9%9B%86%E7%BE%A4%E9%83%A8%E7%BD%B2%E6%96%B9%E6%A1%88%E6%80%8E%E4%B9%88%E5%81%9A/</link><pubDate>Tue, 27 Apr 2021 11:00:00 +0800</pubDate><guid>/blog/06kafka%E7%BA%BF%E4%B8%8A%E9%9B%86%E7%BE%A4%E9%83%A8%E7%BD%B2%E6%96%B9%E6%A1%88%E6%80%8E%E4%B9%88%E5%81%9A/</guid><description>kafka线上集群部署，该怎么做呢？可以从下面几个大的方向入手。
+操作系统选型 # kafka是基于Java、Scala实现的跨平台的消息引擎系统，虽然是跨平台的，但是线上部署kafka用的最多的操作系统还是Linux，Window、macOS应该都非常少，可能只适合用来学习测试用，线上还是要尽量用Linux。
+Linux操作系统的一些亮点：
+IO多路复用技术，实现更加高效的网络IO操作； 零拷贝技术，数据网络传输效率； 应用部署广泛，社区支持度比较好； 关于零拷贝技术，公司同事allanpan写过一篇非常好的文章，可供参考：
+Linux I/O 原理和 Zero-copy 技术全面揭秘 磁盘选型 # 选机械硬盘呢，还是选固态硬盘呢？Kafka工作过程中比较多的方式是“顺序读写”操作，普通机械硬盘顺序读写效率已经比较高了，因此使用机械硬盘就可以了。
+kafka使用机械硬盘，一个是性能上有也不会比使用固态硬盘差多少（应该是说固态硬盘也没什么优势），再一个是便宜，能降低成本。
+另外要注意冗余，倒不是说就要用RAID，可以多加几个硬盘做冗余就行了。
+磁盘容量 # 磁盘容量要根据业务当前现状，及未来发展情况，合理地规划存储容量。
+可以从以下几个方面入手：
+写入的消息格式是怎样的，存储一条消息需要多少字节？ 当前业务一天需要写入多少消息，10w条，100w条，未来呢？ 消息希望保留多长时间，2周，1个月？ 磁盘冗余备份数是多少，2？3？ 使用启用压缩？用哪种压缩算法？压缩率多少？ 小心评估上述每一个问题，最后就能给出一个相对比较合理地预估了，当然要留些buffer，以应对预料之外的情况。
+网络带宽 # 当我们说带宽的时候，我们真正关心的是什么？我们要处理一批数据，比如kafka中的数据，每台机器都是千兆网卡，我们需要多少台机器的合力，才能保证对消息的高效处理。
+So，每台机器的网卡带宽是固定的，我们关心的其实是处理一批数据我们需要多少台机器的问题。
+根据消息生产速率，以及单条消息大小，可以很容易计算出每秒大约能生成多少数据，现在我们要处理这些数据，消息队列中的消息不能一直处于积压状态，那意味着处理速度跟不上生产，后面会处理地越来越不及时。
+怎么办？就需要根据接受消息处理的速率，来评估大约需要机器来处理。而接收消息的速率，单机受限于网卡，用总的生产数据量（通常等于消费数据量）除以网卡带宽，就可以拿到一个比较粗糙的机器数量。
+真实情况是，要为每台机器预留一定的贷款，比如每台机器70%的带宽用于处理数据，其他 的留给一些系统、网络服务等。</description></item><item><title>05聊聊kafka的版本号</title><link>/blog/05%E8%81%8A%E8%81%8Akafka%E7%9A%84%E7%89%88%E6%9C%AC%E5%8F%B7/</link><pubDate>Mon, 26 Apr 2021 02:10:00 +0800</pubDate><guid>/blog/05%E8%81%8A%E8%81%8Akafka%E7%9A%84%E7%89%88%E6%9C%AC%E5%8F%B7/</guid><description>了解kafka的版本演进，及各个版本的特性，更方便确定自己的业务选择合适的版本。
+kafka版本号说明：kafka-2.11-2.2.1.tgz
+kafka的服务端是用scala编写的，其中2.11表示的是scala编译器实现的，其中2.2.1才是kafka的版本号，主版本2、副版本2、修订版本1。
+了解各个版本的演进
+Kafka 目前总共演进了 7 个大版本，分别是 0.7、0.8、0.9、0.10、0.11、1.0 和 2.0，其中的小版本和 Patch 版本很多。哪些版本引入了哪些重大的功能改进？关于这个问题，我建议你最好能做到如数家珍。
+额，历史版本暂时先不深究了。
+最后还有个建议，不论你用的是哪个版本，都请尽量保持服务器端版本和客户端版本一致，否则你将损失很多 Kafka 为你提供的性能优化收益。</description></item><item><title>04我们应该选择哪种kafka</title><link>/blog/04%E6%88%91%E4%BB%AC%E5%BA%94%E8%AF%A5%E9%80%89%E6%8B%A9%E5%93%AA%E7%A7%8Dkafka/</link><pubDate>Mon, 26 Apr 2021 02:00:00 +0800</pubDate><guid>/blog/04%E6%88%91%E4%BB%AC%E5%BA%94%E8%AF%A5%E9%80%89%E6%8B%A9%E5%93%AA%E7%A7%8Dkafka/</guid><description>pk其他流处理平台 # Apache Storm、Apache Spark Streaming 亦或是 Apache Flink，它们在大规模流处理领域可都是响当当的名字。
+令人高兴的是，Kafka 经过这么长时间不断的迭代，现在已经能够稍稍比肩这些框架了。我在这里使用了“稍稍”这个字眼，一方面想表达 Kafka 社区对于这些框架心存敬意；另一方面也想表达目前国内鲜有大厂将 Kafka 用于流处理的尴尬境地，毕竟 Kafka 是从消息引擎“半路出家”转型成流处理平台的，它在流处理方面的表现还需要经过时间的检验。
+kafka connect，扩展了kafka的流式处理生态
+你知道几种kafka？ # apache kafka，社区版，是后续所有版本的基础 confluent kafka，提供了一些其他功能，如跨数据中心备份、集群监控工具等 cloudera/hortonworks kafka，提供的CDH和HDP是非常有名的大数据平台，里面集成了目前主流的大数据框架，现在两个公司已经合并，都集成了apache kafka。 apache kafka的优缺点 # 优点：
+开发人数多、活跃，版本迭代快 缺点：
+仅仅提供最基础的组件 kafka connect，仅提供一种读写文件的连接器，其他的要自己实现 没有任何监控框架或者工具，要借助第三方监控框架来监控（如kafka manager） confluent kafka、cdh/hdp kafka的优缺点就不多说了，国内大公司很少有使用的。</description></item><item><title>03kafka只是消息引擎系统吗</title><link>/blog/03kafka%E5%8F%AA%E6%98%AF%E6%B6%88%E6%81%AF%E5%BC%95%E6%93%8E%E7%B3%BB%E7%BB%9F%E5%90%97/</link><pubDate>Mon, 26 Apr 2021 01:50:00 +0800</pubDate><guid>/blog/03kafka%E5%8F%AA%E6%98%AF%E6%B6%88%E6%81%AF%E5%BC%95%E6%93%8E%E7%B3%BB%E7%BB%9F%E5%90%97/</guid><description>如果一个点一个点的学习，虽然了解了一个个点的作用，但是不能快速建立起全局的认识，也比较容易丧失学习兴趣，还是先了解全貌再深入细节，学习效果会更好一点。
+apache kafka只是一个消息引擎系统吗 # apache kafka是消息引擎系统； apache kafka也是一个分布式流式处理平台（distributed streaming platform）； kafka出自linkedin，kafka 社区将其清晰地定位为一个分布式、分区化且带备份功能的提交日志（Commit Log）服务。
+Kafka 在设计之初就旨在提供三个方面的特性 # 提供一套 API 实现生产者和消费者； 降低网络传输和磁盘存储开销； 实现高伸缩性架构。 kafka的华丽变身 # 所有的数据几乎都要从一个系统流入 Kafka 然后再流向下游的另一个系统中。这样的使用方式屡见不鲜以至于引发了 Kafka 社区的思考：与其我把数据从一个系统传递到下一个系统中做处理，我为何不自己实现一套流处理框架呢？Kafka Streams诞生了！
+kafka与其他主流大数据流式计算框架相比，优势在哪里呢？
+更容易实现端到端的正确性，能够实现端到端的精确一次性处理语义。
+自己对于流式计算的定位，和其他的一些流失计算框架不同，它更轻量，不涉及集群调度等等比较重的东西，比较适合中小企业；
+ps：kafka不适合当做最终存储。</description></item><item><title>02快速搞定kafka术语</title><link>/blog/02%E5%BF%AB%E9%80%9F%E6%90%9E%E5%AE%9Akafka%E6%9C%AF%E8%AF%AD/</link><pubDate>Mon, 26 Apr 2021 01:40:00 +0800</pubDate><guid>/blog/02%E5%BF%AB%E9%80%9F%E6%90%9E%E5%AE%9Akafka%E6%9C%AF%E8%AF%AD/</guid><description>kafka属于分布式的消息引擎系统，主要功能是提供一套完备的消息发布与订阅解决方案：
+发布的订阅的对象是主题，topic；
+client端
+消息的生产者，producer； 消息的消费者，consumer； server端
+broker 一个broker集群有多个broker，将多个broker部署在多台机器上，当其中一个挂了，另一个broker也依然能对外提供服务，这就是kafka实现高可用的手段之一。 备份机制，replication
+副本，replica，相同的数据在被存储到多台机器上
+领导者副本（leader replica），对外提供服务（与客户端交互）
+追随者副本（follower replica），只能被动地跟随领导者副本，不与外界交互
+追随者副本请求领导者副本，把最新的更新操作发送给它，以完成同步
+可伸缩性
+将每个topic，划分成多个分区（partition），分区编号从0开始； 副本是在分区这个层级定义的，即每个分区可以定义副本的数量； topic ：每个主题可以包含多个分区
+​ \
+partition：每个分区可以配置多个副本
+​ \
+​ replica (leader/follower)：每个分区的多个副本中只能有一个为leader，对外服务
+​ \
+​ offset：消息曾，分区中包含若干条消息，每条消息的位移从0开始，依次递增
+client只能与分区的leader replica进行通信。
+消费组里面可以订阅
+kafka broker通过追加写，来实现持久化，来避免缓慢的随机IO操，利用了比较好的顺序写操作。
+再来回顾下这里的常见术语：
+消息：Record。Kafka 是消息引擎嘛，这里的消息就是指 Kafka 处理的主要对象。
+主题：Topic。主题是承载消息的逻辑容器，在实际使用中多用来区分具体的业务。
+分区：Partition。一个有序不变的消息序列。每个主题下可以有多个分区。</description></item><item><title>01消息引擎系统</title><link>/blog/01%E6%B6%88%E6%81%AF%E5%BC%95%E6%93%8E%E7%B3%BB%E7%BB%9Fabc/</link><pubDate>Mon, 26 Apr 2021 01:30:00 +0800</pubDate><guid>/blog/01%E6%B6%88%E6%81%AF%E5%BC%95%E6%93%8E%E7%B3%BB%E7%BB%9Fabc/</guid><description>apache kafka是什么呢？
+消息引擎系统（messaging systems）🆗 这种描述更加准确！ 消息队列（是用队列实现的？not accurately) 消息中间件（messaging middleware） 类似地，比如consensus algorithm，翻译成共识算法，比一致性算法更合适，一致性已经被用的泛滥了。
+消息编码方式： # 消息编码格式，csv、xml、json、pb、thrift； kafka使用的是纯二进制的字节序列； 消息传输方式： # 点对点，系统a发送的消息只能被b接受，其他人都不能接收； 发布订阅，可以有多个发送方（发布者，可能有多个），接收方（订阅方，可能有多个），这种能够实现非常灵活的系统扩展； JMS：严格来说，是一种规范，而不是一种实现。
+消息引擎的作用： # 削峰填谷，避免生产者发送过量消息冲垮下游，使得下游能够平滑处理大量请求；
+为什么不对上游进行限速？限制后影响到用户体验怎么办？不现实！
+解耦，解耦生产者和消费者，容易实现灵活的扩展；
+比如量大了之后，加更多的消费者来提高处理效率就行了嘛，加的慢也没影响，不会直接对用户体验造成影响。</description></item><item><title>08重要的集群参数配置</title><link>/blog/08%E9%87%8D%E8%A6%81%E7%9A%84%E9%9B%86%E7%BE%A4%E5%8F%82%E6%95%B0%E9%85%8D%E7%BD%AE%E4%B8%8B/</link><pubDate>Mon, 01 Jan 0001 00:00:00 +0000</pubDate><guid>/blog/08%E9%87%8D%E8%A6%81%E7%9A%84%E9%9B%86%E7%BE%A4%E5%8F%82%E6%95%B0%E9%85%8D%E7%BD%AE%E4%B8%8B/</guid><description>略，感兴趣可以参考：https://time.geekbang.org/column/article/101763</description></item><item><title>09生产者消息分区原理剖析</title><link>/blog/09%E7%94%9F%E4%BA%A7%E8%80%85%E6%B6%88%E6%81%AF%E5%88%86%E5%8C%BA%E5%8E%9F%E7%90%86%E5%89%96%E6%9E%90/</link><pubDate>Mon, 01 Jan 0001 00:00:00 +0000</pubDate><guid>/blog/09%E7%94%9F%E4%BA%A7%E8%80%85%E6%B6%88%E6%81%AF%E5%88%86%E5%8C%BA%E5%8E%9F%E7%90%86%E5%89%96%E6%9E%90/</guid><description>kafka中数据组织 # 主题 topic 分区 partition（一个topic下可有多个partitions，每个partition都有副本replicas） 消息 message（同一个partition内的消息是有序的）</description></item></channel></rss>

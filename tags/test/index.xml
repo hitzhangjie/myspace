@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>test on</title><link>/tags/test/</link><description>Recent content in test on</description><generator>Hugo -- gohugo.io</generator><language>en-US</language><lastBuildDate>Wed, 19 Aug 2020 00:40:31 +0800</lastBuildDate><atom:link href="/tags/test/index.xml" rel="self" type="application/rss+xml"/><item><title>选择合适的测试框架</title><link>/blog/2020-08-19-go%E5%BC%80%E5%8F%91%E5%A6%82%E4%BD%95%E5%81%9A%E6%B5%8B%E8%AF%95%E9%80%89%E6%8B%A9%E5%90%88%E9%80%82%E7%9A%84%E6%B5%8B%E8%AF%95%E6%A1%86%E6%9E%B6/</link><pubDate>Wed, 19 Aug 2020 00:40:31 +0800</pubDate><guid>/blog/2020-08-19-go%E5%BC%80%E5%8F%91%E5%A6%82%E4%BD%95%E5%81%9A%E6%B5%8B%E8%AF%95%E9%80%89%E6%8B%A9%E5%90%88%E9%80%82%E7%9A%84%E6%B5%8B%E8%AF%95%E6%A1%86%E6%9E%B6/</guid><description>开发除了编写代码，也应该关注如何保证代码的可测试性，以及维护有效的测试用例。最近团队对单测要求不断提高，也将之前收集、积累的一点测试相关的内容记录分享下。这篇主要总结下常见的测试框架的优缺点。
+如何做好测试，是一门系统性的方法学，而不只是一些零零散散的经验。根据测试目的的不同，对测试方法可以作如下分类：
+稳定性测试 压力测试 回归测试 冒烟测试 性能测试 功能测试 安全测试 可用性测试 &amp;hellip; 这么多的测试方法，最初我还是在填写一项IntelliJ IDEA发起的问卷调查时了解到的，后面在研发过程中也渐渐加深了对这些测试方法的认识。这里面的每一项测试，我认为开发都是应该去了解的。
+很多测试方法是通用的，和具体语言无关，这篇文章只重点关注go开发如何做单元测试。这是每位开发首先应该掌握起来的，它是其他测试得以顺利展开的基础。
+开发在编码阶段，应该在本地完成单测相关的工作，保证测试用例通过，在自动化构建阶段应该有能力执行一些跑单测、BVT测试的任务，通过后才允许提交给测试团队。当然现在EPC实行起来之后，大部分团队都是这么执行的了。
+研发效能要求提升代码库的测试覆盖率，要提高测试的价值，我们得先学些下掌握比较好的测试的方法。
+参考了下go测试的一些实践，业务中肯定会遇到如下这些情况，或多或少：
+新老服务都有比较多的外部依赖，比如网络调用、读db等 存量服务维护、开发，有些不适合大范围重构的 测试不要侵入业务代码，不能为了测试写太多不相干的东西 go单测中使用的比较多的，大致有如下这些选择， gomock+gostub+gomonkey+goconvey，现在go用的比较多的就是这几个，我比较推荐gomock、gomonkey，看情况，灵活组合使用吧，先总结下这几个的使用方式、优缺点。
+gomock是基于interface的，mockgen生成interface对应的mock桩代码，然后再去写mock代码。 如果前期没这些interface设计的话，也不方便测试。有的话，看起来也不是特别方便。 gostub支持对变量、方法、过程进行mock，但是用上它，存量代码的话就要做些调整，对代码有侵入， 因为它是基于变量去作mock，比如func Hello(&amp;hellip;)要改成var Hello=func(&amp;hellip;)才能用 gomonkey也支持对变量、方法、过程进行mock，我现在感觉这个比较好用，简单，对代码无侵入， 和gostub实现原理不太一样，比如函数，它通过汇编调整跳转地址，这么着对内联函数就支持不到了，就得-gcflags=&amp;ldquo;all=-l&amp;quot;禁用内联 goconvey主要是用来更好地管理测试用例，可以根据情况用或者不用 这里有几篇文章，感兴趣的可以先看下：
+组合灵活使用，gomock+gostub+gomonkey+goconvey：https://www.jianshu.com/p/2f675d5e334e gomonkey实现原理：https://bouk.co/blog/monkey-patching-in-go/ 在深度使用上述几个测试框架之后，个人感觉gomonkey+goconvery组合是比较合适的，goconvey也可以考虑用go testing框架t.Run代替来维护子测试。
+很多同学对开发阶段写单测，多少还是有些抵触的，常见的理由大多是没时间写单测。我的理解是，这里有个因果倒置的问题，写单测的目的并不是为了写而写，写单侧的目的是为了验证你的逻辑或者测试先行驱动逻辑开发，甚至还会为后续的修改保驾护航。
+在开发阶段写单测，客观上会花些时间，但是也会节省频繁提交构建、部署、测试的时间，开发阶段在上述操作中频繁切换的次数会大幅减少。
+我的体验是这样的，仅供参考。</description></item><item><title>go开发如何做测试：表驱动测试</title><link>/blog/2020-08-19-go%E5%BC%80%E5%8F%91%E5%A6%82%E4%BD%95%E5%81%9A%E6%B5%8B%E8%AF%95%E8%A1%A8%E9%A9%B1%E5%8A%A8%E6%B5%8B%E8%AF%95/</link><pubDate>Wed, 19 Aug 2020 00:36:19 +0800</pubDate><guid>/blog/2020-08-19-go%E5%BC%80%E5%8F%91%E5%A6%82%E4%BD%95%E5%81%9A%E6%B5%8B%E8%AF%95%E8%A1%A8%E9%A9%B1%E5%8A%A8%E6%B5%8B%E8%AF%95/</guid><description>开发除了编写代码，也应该关注如何保证代码的可测试性，以及维护有效的测试用例。最近团队对单测要求不断提高，也将之前收集、积累的一点测试相关的内容记录分享下。本文转自Dave Cheney的表驱动测试一文，这篇文章写得挺好的。
+Prefer table driven tests # I’m a big fan of testing, specifically unit testing and TDD (done correctly, of course). A practice that has grown around Go projects is the idea of a table driven test. This post explores the how and why of writing a table driven test.
+Let’s say we have a function that splits strings:
+// Split slices s into all substrings separated by sep and // returns a slice of the substrings between those separators.</description></item><item><title>开发者应掌握的系统性测试方法</title><link>/blog/2020-07-01-%E5%BC%80%E5%8F%91%E8%80%85%E5%BA%94%E6%8E%8C%E6%8F%A1%E7%9A%84%E7%B3%BB%E7%BB%9F%E6%80%A7%E6%B5%8B%E8%AF%95%E6%96%B9%E6%B3%95/</link><pubDate>Wed, 01 Jul 2020 20:30:01 +0800</pubDate><guid>/blog/2020-07-01-%E5%BC%80%E5%8F%91%E8%80%85%E5%BA%94%E6%8E%8C%E6%8F%A1%E7%9A%84%E7%B3%BB%E7%BB%9F%E6%80%A7%E6%B5%8B%E8%AF%95%E6%96%B9%E6%B3%95/</guid><description>/* Three image containers (use 25% for four, and 50% for two, etc) */ .column { float: left; width: 50%; padding: 5px; } /* Clear floats after image containers */ .row::after { content: ""; clear: both; display: table; } .fixsize { width: 400px; } .fullsize { width: 680px; } 如何做好测试，是一门系统性的方法学，而不只是一些零零散散的经验。了解并掌握各种测试的目的、方法是非常有必要的。
+最近工作中也在推动测试相关的一些事项，有一点感触，这里先简单总结下常见测试方法的目的，大致包括如下几类。
+1. 研发流程中构建环节
+冒烟测试
+该术语，取自集成电路开发领域，集成电路在测试之前，先要加电检查，如果没有冒烟才能进行后续的测试。冒烟测试并不是测试过程的一个阶段，它是软件构建过程中的一个环节，它包含一些非常基础的测试，如保证编译通过、部分核心用例通过，它随每次构建触发，处于持续集成的一个环节。英文表述为BVT测试，Build Verification Testing，从中更能感受的到。将其理解为测试的一个阶段，是一个巨大的误区。 2. 功能性指标相关测试
+功能测试
+软件需求说明中对软件需要的功能进行了描述，软件需求分析阶段会对需求说明进行详细分析，并整理出相关的规格说明，包括每个用例的输入、输出等等。功能测试，其实也就是对这里的软件需求规格说明进行测试用例的覆盖，考察的是对各个点、异常路径的把控程度。在实际研发过程中，开发人员一般会先自测通过后，再转给测试团队进行进一步的测试。
+回归测试
+之前已经测试过的用例，可以沉淀下来，供以后进行回归，已发现软件变更、升级期间是否引入了bug。</description></item><item><title>go源码剖析-gotest实现</title><link>/blog/2020-02-23-go%E6%BA%90%E7%A0%81%E5%89%96%E6%9E%90-gotest%E5%AE%9E%E7%8E%B0/</link><pubDate>Sun, 23 Feb 2020 16:54:07 +0800</pubDate><guid>/blog/2020-02-23-go%E6%BA%90%E7%A0%81%E5%89%96%E6%9E%90-gotest%E5%AE%9E%E7%8E%B0/</guid><description>问题背景 # 在go1.13出来后不久，有不少同学遇到了go test报错的问题 “flag -test.timeout provided but not defined”。这个问题是如何引起的呢？
+公司微服务代码，通常是借助代码生成工具统一生成的，包括针对接口的测试用例； 在生成单元测试文件时，如helloworld_test.go中，在该文件中定义了一些测试选项如-timeout、-service、-method、-target、-req、-rsp等； 上述定义的选项，在helloworld_test.go中的func init()中执行flag.Parse()操作完成选项解析。 这是被测试代码的一点背景信息，上述测试代码在go1.12中是没有问题的，但是当升级到go1.13后，就出现了上述“flag &amp;hellip; provided but not defined”的错误。
+实现细节 # go test实现细节，需要跟踪一下命令go test的执行过程，具体对应这个源文件：src/cmd/go/internal/test/test.go。
+假如现在，我们创建一个package名为xxxx的go文件，然后创建一个package名为xxxx_test的_test文件，如：
+file: helloworld_test.go
+package xxxx_test import &amp;quot;testing&amp;quot; import &amp;quot;xxxx&amp;quot; func TestHelloWorld(t *testing.T) { xxxx.Hello() } /* func init() { flag.Parse() } */ /* func TestMain(m *testing.M) { os.Exit(m.Run()) } */ file: helloworld.go
+package xxxx func Hello() { } 这里的实例代码，做了适当的简化，方便大家查看。为了更好地跟踪go test过程，我们可以以调试模式运行go test，如GOTMPDIR=$(pwd)/xxx dlv exec $(which go) -- test -c：</description></item></channel></rss>

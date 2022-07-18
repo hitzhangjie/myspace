@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>table lock on</title><link>/tags/table-lock/</link><description>Recent content in table lock on</description><generator>Hugo -- gohugo.io</generator><language>en-US</language><lastBuildDate>Fri, 23 Apr 2021 19:00:00 +0800</lastBuildDate><atom:link href="/tags/table-lock/index.xml" rel="self" type="application/rss+xml"/><item><title>06全局锁和表锁：给表加个字段怎么这么难</title><link>/blog/06%E5%85%A8%E5%B1%80%E9%94%81%E5%92%8C%E8%A1%A8%E9%94%81%E7%BB%99%E8%A1%A8%E5%8A%A0%E4%B8%AA%E5%AD%97%E6%AE%B5%E6%80%8E%E4%B9%88%E8%BF%99%E4%B9%88%E9%9A%BE/</link><pubDate>Fri, 23 Apr 2021 19:00:00 +0800</pubDate><guid>/blog/06%E5%85%A8%E5%B1%80%E9%94%81%E5%92%8C%E8%A1%A8%E9%94%81%E7%BB%99%E8%A1%A8%E5%8A%A0%E4%B8%AA%E5%AD%97%E6%AE%B5%E6%80%8E%E4%B9%88%E8%BF%99%E4%B9%88%E9%9A%BE/</guid><description>根据加锁的范围，mysql中的锁可以分为：全局锁、表锁、行锁 3类。
+全局锁 # 全局锁，是对整个数据库实例进行加锁，如通过命令Flush tables with read lock (FTWRL)加全局读锁，锁定后，数据更新（增删改）、数据定义（建表、修改表等）都会被阻塞。
+其作用，主要是做全库逻辑备份，也就是把全表select出来存成文本。
+加全局读锁之后，再开始备份，但是有风险：
+如果是对主库备份，开了全局读锁之后，库不能写入，意味着业务基本不可用； 如果是对从库备份，开了全局读锁之后，从库新同步过来的binlog假如有表结构修改的操作，会导致因为拿不到MDL（metadata lock）而阻塞，无法修改表结构这一个阻塞还好，更严重的是会导致后续所有的拿MDL读锁的操作失败，包括正常的更新数据。因此这种方法容易造成主从同步延迟； **备份数据，为什么要加锁，能不能不加锁？**不能！数据一致性，这个很好理解，不解释！
+有没有不加全局锁的方法，有，但是要看引擎是否支持事务：
+MyISAM引擎，不支持事务，只能用加全局读锁的方式锁定之后再开始备份
+InnoDB引擎，支持事务，主库备份的时候通过&amp;ndash;single-transaction，开启独立的事务进行备份：
+因为备份时候设定的事务隔离级别是RR（可重复读），一致性问题不用担心了； 备份过程中也会拿MDL lock读锁，如果备份过程中有表结构更新操作，也可能会因为拿不到MDL写锁而阻塞，也会阻塞后续的所有数据更新动作； 针对上面问题，AliSQL提了个PR已经合入MariaDB，即尝试修改表的时候加个超时时间，如果过了超时时间还没有拿到MDL锁，则失败，等后续重试，这样至少不会阻塞正常的数据更新操作； 这里涉及了表锁中的一种：MDL锁
+加全局读锁，可以将数据库设置为只读，还有一种办法，设置全局变量set global readonly=true，但是这种方式，风险更高：
+通常这个属性还用来区分一个数据库是主库还是从从库，如果贸然修改这个变量，可能会造成一些其他应用的误判； 假如客户端申请了加全局锁且成功之后，如果客户端崩溃了，这个全局锁还是可以自动被释放掉的，库还是可以写入的。但是，如果客户端通过全局变量将库设置为了只读，那么客户端崩溃后，库也是只读的，不可写入的； 表锁 # 加表锁，主要有两种形式，lock tables&amp;hellip; 和 MDL lock。
+lock tables &amp;hellip; with read/write # 这种加锁方式，对应的解锁方式是 unlock tables
+这种加锁方式，对其他线程能否读写、当前线程能否读写都做了明确的限制。假定当前线程p读表t1加读锁、对表t2加写锁，那么：
+其他线程q是不能对t1执行写操作的，对t2也不能执行读操作，这个好理解； 当前线程p也是不能对t1执行写操作的，也不能对t2执行读操作； 可以理解成没有考虑锁的重入、读写排他性；</description></item></channel></rss>

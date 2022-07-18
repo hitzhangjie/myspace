@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>goconvey on</title><link>/tags/goconvey/</link><description>Recent content in goconvey on</description><generator>Hugo -- gohugo.io</generator><language>en-US</language><lastBuildDate>Wed, 19 Aug 2020 00:40:31 +0800</lastBuildDate><atom:link href="/tags/goconvey/index.xml" rel="self" type="application/rss+xml"/><item><title>选择合适的测试框架</title><link>/blog/2020-08-19-go%E5%BC%80%E5%8F%91%E5%A6%82%E4%BD%95%E5%81%9A%E6%B5%8B%E8%AF%95%E9%80%89%E6%8B%A9%E5%90%88%E9%80%82%E7%9A%84%E6%B5%8B%E8%AF%95%E6%A1%86%E6%9E%B6/</link><pubDate>Wed, 19 Aug 2020 00:40:31 +0800</pubDate><guid>/blog/2020-08-19-go%E5%BC%80%E5%8F%91%E5%A6%82%E4%BD%95%E5%81%9A%E6%B5%8B%E8%AF%95%E9%80%89%E6%8B%A9%E5%90%88%E9%80%82%E7%9A%84%E6%B5%8B%E8%AF%95%E6%A1%86%E6%9E%B6/</guid><description>开发除了编写代码，也应该关注如何保证代码的可测试性，以及维护有效的测试用例。最近团队对单测要求不断提高，也将之前收集、积累的一点测试相关的内容记录分享下。这篇主要总结下常见的测试框架的优缺点。
+如何做好测试，是一门系统性的方法学，而不只是一些零零散散的经验。根据测试目的的不同，对测试方法可以作如下分类：
+稳定性测试 压力测试 回归测试 冒烟测试 性能测试 功能测试 安全测试 可用性测试 &amp;hellip; 这么多的测试方法，最初我还是在填写一项IntelliJ IDEA发起的问卷调查时了解到的，后面在研发过程中也渐渐加深了对这些测试方法的认识。这里面的每一项测试，我认为开发都是应该去了解的。
+很多测试方法是通用的，和具体语言无关，这篇文章只重点关注go开发如何做单元测试。这是每位开发首先应该掌握起来的，它是其他测试得以顺利展开的基础。
+开发在编码阶段，应该在本地完成单测相关的工作，保证测试用例通过，在自动化构建阶段应该有能力执行一些跑单测、BVT测试的任务，通过后才允许提交给测试团队。当然现在EPC实行起来之后，大部分团队都是这么执行的了。
+研发效能要求提升代码库的测试覆盖率，要提高测试的价值，我们得先学些下掌握比较好的测试的方法。
+参考了下go测试的一些实践，业务中肯定会遇到如下这些情况，或多或少：
+新老服务都有比较多的外部依赖，比如网络调用、读db等 存量服务维护、开发，有些不适合大范围重构的 测试不要侵入业务代码，不能为了测试写太多不相干的东西 go单测中使用的比较多的，大致有如下这些选择， gomock+gostub+gomonkey+goconvey，现在go用的比较多的就是这几个，我比较推荐gomock、gomonkey，看情况，灵活组合使用吧，先总结下这几个的使用方式、优缺点。
+gomock是基于interface的，mockgen生成interface对应的mock桩代码，然后再去写mock代码。 如果前期没这些interface设计的话，也不方便测试。有的话，看起来也不是特别方便。 gostub支持对变量、方法、过程进行mock，但是用上它，存量代码的话就要做些调整，对代码有侵入， 因为它是基于变量去作mock，比如func Hello(&amp;hellip;)要改成var Hello=func(&amp;hellip;)才能用 gomonkey也支持对变量、方法、过程进行mock，我现在感觉这个比较好用，简单，对代码无侵入， 和gostub实现原理不太一样，比如函数，它通过汇编调整跳转地址，这么着对内联函数就支持不到了，就得-gcflags=&amp;ldquo;all=-l&amp;quot;禁用内联 goconvey主要是用来更好地管理测试用例，可以根据情况用或者不用 这里有几篇文章，感兴趣的可以先看下：
+组合灵活使用，gomock+gostub+gomonkey+goconvey：https://www.jianshu.com/p/2f675d5e334e gomonkey实现原理：https://bouk.co/blog/monkey-patching-in-go/ 在深度使用上述几个测试框架之后，个人感觉gomonkey+goconvery组合是比较合适的，goconvey也可以考虑用go testing框架t.Run代替来维护子测试。
+很多同学对开发阶段写单测，多少还是有些抵触的，常见的理由大多是没时间写单测。我的理解是，这里有个因果倒置的问题，写单测的目的并不是为了写而写，写单侧的目的是为了验证你的逻辑或者测试先行驱动逻辑开发，甚至还会为后续的修改保驾护航。
+在开发阶段写单测，客观上会花些时间，但是也会节省频繁提交构建、部署、测试的时间，开发阶段在上述操作中频繁切换的次数会大幅减少。
+我的体验是这样的，仅供参考。</description></item></channel></rss>

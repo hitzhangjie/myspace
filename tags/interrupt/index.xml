@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>interrupt on</title><link>/tags/interrupt/</link><description>Recent content in interrupt on</description><generator>Hugo -- gohugo.io</generator><language>en-US</language><lastBuildDate>Wed, 29 Jun 2022 20:48:50 +0800</lastBuildDate><atom:link href="/tags/interrupt/index.xml" rel="self" type="application/rss+xml"/><item><title>中断请求亲和性</title><link>/blog/irq-affinity/</link><pubDate>Wed, 29 Jun 2022 20:48:50 +0800</pubDate><guid>/blog/irq-affinity/</guid><description>SMP IRQ affinity，指的是对称多处理器中的中断请求绑定。
+/proc/irq/IRQ#/smp_affinity和/proc/irq/IRQ#/smp_affinity_list指明了允许接收某 个中断请求IRQ#的多个或某个cpu。它是一个位掩码smp_affinity或者一个cpu列表 smp_affinity_list，其中记录了允许接受该中断请求的cpu。不允许禁止所有cpu接收该 中断请求，如果一个中断控制器不支持中断请求绑定，那么只能采用默认值，即允许所有 cpu接收该中断请求，并且这个值不会被修改。
+/proc/irq/default_smp_affinity指明了默认的中断绑定掩码，这个默认值将应用于所有 的非活动的、未激活的中断号。一旦一个中断号被分配、激活，那么它的中断绑定掩码将 被设置为这个默认值。这个默认值可以通过前面提到过的方法进行修改。这个默认掩码的 值为0xffffffff，请注意，该掩码是32位的。
+这里举个例子，网卡eth1中断请求IRQ44限定发送到CPU0-3，而后再限定发送到CPU4-7。
+网卡向cpu发中断请求44，下面我们对这个中断请求与cpu的绑定关系进行设置，并通过 ping命令进行测试，网卡会将接收到的icmp请求，以中断44的形式发送到绑定的cpu，通 过查看cpu接收到的中断请求数量，我们可以判断，这个44这个中断请求与cpu的绑定关系 。
+[root@moon 44]# cd /proc/irq/44 [root@moon 44]# cat smp_affinity ffffffff 首先，查看到44这个中断请求的默认绑定掩码为0xffffffff，说明，所有的cpu都可以接 收该中断请求。
+[root@moon 44]# echo 0f &amp;gt; smp_affinity [root@moon 44]# cat smp_affinity 0000000f 然后我们设置smp_affinity的值为0x0000000f，即使得编号为0-3的cpu允许接收该44这个 中断请求，其他的cpu都不会接收44这个中断请求。
+[root@moon 44]# ping -f h PING hell (195.4.7.3): 56 data bytes ... --- hell ping statistics --- 6029 packets transmitted, 6027 packets received, 0% packet loss round-trip min/avg/max = 0.</description></item></channel></rss>

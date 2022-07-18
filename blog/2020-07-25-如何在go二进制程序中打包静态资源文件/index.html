@@ -1,0 +1,133 @@
+<!doctype html><html lang=en-us><head><meta charset=utf-8><meta http-equiv=x-ua-compatible content="ie=edge"><meta name=viewport content="width=device-width,initial-scale=1,shrink-to-fit=no"><link rel=preload as=font href=/fonts/vendor/jost/jost-v4-latin-regular.woff2 type=font/woff2 crossorigin><link rel=preload as=font href=/fonts/vendor/jost/jost-v4-latin-500.woff2 type=font/woff2 crossorigin><link rel=preload as=font href=/fonts/vendor/jost/jost-v4-latin-700.woff2 type=font/woff2 crossorigin><link rel=stylesheet href=/main.63b6b8ff933309fcc94a30e21d69932290c8643fa1a32893f5681778c776ed3e51c237a1acd00b42426b3bf780c351b4a6ce75b3b659915ef0dd610b2e027a8c.css integrity="sha512-Y7a4/5MzCfzJSjDiHWmTIpDIZD+hoyiT9WgXeMd27T5RwjehrNALQkJrO/eAw1G0ps51s7ZZkV7w3WELLgJ6jA==" crossorigin=anonymous><noscript><style>img.lazyload{display:none}</style></noscript><meta name=robots content="index, follow"><meta name=googlebot content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1"><meta name=bingbot content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1"><title>如何在go二进制程序中打包静态资源文件 - MySpace</title><meta name=description content="Why? # 有时我们希望在go二进制程序中打包一些静态资源文件，目的可能有多种，比较常见的是为了简化安装。通常我们安装一个go编写的工具，更倾向于使用 go get $repo 的方式来完成，这似乎已经成为了一种共识。当然，也有些项目还依赖一些静态资源文件，这些静态资源文件是不会被自动安装的，就需要借助其他方式来完成静态资源的安装，比如通过install.sh脚本，后者Makefile构建脚本等等。
+今天，我想讨论下，如何简单快速地支持静态资源打包到二进制程序中，以及在二进制程序中对这些静态资源加以引用。
+How? # github上已经有不少开发者在探索，方法其实都比较雷同，大致思路就是：
+ 读取静态资源文件，转换成bytes数据； 内部提供一些类似文件系统的接口，提供文件名，返回文件数据； blabla&amp;hellip;  开发者的需求，可能不完全一致，比如：
+ 我想像遍历本地文件系统一样遍历文件目录，不只是提供一个文件名返回一个文件； 我的代码已经写完了，我只想做最小修改，将静态资源文件打包到二进制程序中，而后还原回文件系统； 我的代码不需要支持类似文件服务器的功能，不需要那么多华丽呼哨的功能；  开发者提供了很多类似的实现，这里有篇文章可供参考：https://tech.townsourced.com/post/embedding-static-files-in-go/。能工模形，巧匠窃意。其实在大致了解了实现的方式之后，就懒得再去学如何使用这些五花八门的第三方工具了。说真的，真的没几个好用的，至少从我的角度来说。可能它设计的比较通用，但是与我来说没有用处，我追求极简。
+而且，go官方是有意来支持打包静态资源的，关于这一点，已经有issue在跟进讨论：https://github.com/golang/go/issues/35950。
+尽管现在的状态还是Proposal-Hold状态，但是我觉得这个feature的到来也不会等很久了，anyway，我不想在这些即将被淘汰的三方工具上浪费学习的时间、改写代码的时间。
+所以呢，为什么不简单一点，自己写一个当下比较适用项目本身的？写这个东西花不了二十分钟时间！
+Let&amp;rsquo;s Do it! # 功能分析 # 我理解实现打包静态资源文件，有这么几个点需要考虑：
+ 提供一个小工具，通过它可以反复执行类似的静态资源打包的操作； 可以指定一个文件或者目录，将其转换成一个go文件放入项目中，允许编译时连接； go文件可以通过导出变量的形式，导出文件数据，允许在其他go代码中引用文件的内容； 静态资源文件可能有很多，希望能对文件内容进行压缩，以便减小go binary文件尺寸； 通常是本地组织好静态资源文件，写代码、测试ok、最后发布前希望将其打包到go binary，打包、解包、使用静态资源要最小化项目代码修改；  功能实现 # 我们先实现这个打包静态资源的工具，需要这几个参数：input、output，分别代表输入文件（or 目录）、输出文件名（go文件），gopkg代表输出go文件的包名（默认gobin）。
+package main var ( input = flag.String(&amp;quot;input&amp;quot;, &amp;quot;&amp;quot;, &amp;quot;read data from input, which could be a regular file or directory&amp;quot;) output = flag.String(&amp;quot;output&amp;quot;, &amp;quot;&amp;quot;, &amp;quot;write transformed data to named *."><link rel=canonical href=/blog/2020-07-25-%E5%A6%82%E4%BD%95%E5%9C%A8go%E4%BA%8C%E8%BF%9B%E5%88%B6%E7%A8%8B%E5%BA%8F%E4%B8%AD%E6%89%93%E5%8C%85%E9%9D%99%E6%80%81%E8%B5%84%E6%BA%90%E6%96%87%E4%BB%B6/><meta property="og:locale" content="en_US"><meta property="og:type" content="article"><meta property="og:title" content="如何在go二进制程序中打包静态资源文件"><meta property="og:description" content="Why? # 有时我们希望在go二进制程序中打包一些静态资源文件，目的可能有多种，比较常见的是为了简化安装。通常我们安装一个go编写的工具，更倾向于使用 go get $repo 的方式来完成，这似乎已经成为了一种共识。当然，也有些项目还依赖一些静态资源文件，这些静态资源文件是不会被自动安装的，就需要借助其他方式来完成静态资源的安装，比如通过install.sh脚本，后者Makefile构建脚本等等。
+今天，我想讨论下，如何简单快速地支持静态资源打包到二进制程序中，以及在二进制程序中对这些静态资源加以引用。
+How? # github上已经有不少开发者在探索，方法其实都比较雷同，大致思路就是：
+ 读取静态资源文件，转换成bytes数据； 内部提供一些类似文件系统的接口，提供文件名，返回文件数据； blabla&mldr;  开发者的需求，可能不完全一致，比如：
+ 我想像遍历本地文件系统一样遍历文件目录，不只是提供一个文件名返回一个文件； 我的代码已经写完了，我只想做最小修改，将静态资源文件打包到二进制程序中，而后还原回文件系统； 我的代码不需要支持类似文件服务器的功能，不需要那么多华丽呼哨的功能；  开发者提供了很多类似的实现，这里有篇文章可供参考：https://tech.townsourced.com/post/embedding-static-files-in-go/。能工模形，巧匠窃意。其实在大致了解了实现的方式之后，就懒得再去学如何使用这些五花八门的第三方工具了。说真的，真的没几个好用的，至少从我的角度来说。可能它设计的比较通用，但是与我来说没有用处，我追求极简。
+而且，go官方是有意来支持打包静态资源的，关于这一点，已经有issue在跟进讨论：https://github.com/golang/go/issues/35950。
+尽管现在的状态还是Proposal-Hold状态，但是我觉得这个feature的到来也不会等很久了，anyway，我不想在这些即将被淘汰的三方工具上浪费学习的时间、改写代码的时间。
+所以呢，为什么不简单一点，自己写一个当下比较适用项目本身的？写这个东西花不了二十分钟时间！
+Let&rsquo;s Do it! # 功能分析 # 我理解实现打包静态资源文件，有这么几个点需要考虑：
+ 提供一个小工具，通过它可以反复执行类似的静态资源打包的操作； 可以指定一个文件或者目录，将其转换成一个go文件放入项目中，允许编译时连接； go文件可以通过导出变量的形式，导出文件数据，允许在其他go代码中引用文件的内容； 静态资源文件可能有很多，希望能对文件内容进行压缩，以便减小go binary文件尺寸； 通常是本地组织好静态资源文件，写代码、测试ok、最后发布前希望将其打包到go binary，打包、解包、使用静态资源要最小化项目代码修改；  功能实现 # 我们先实现这个打包静态资源的工具，需要这几个参数：input、output，分别代表输入文件（or 目录）、输出文件名（go文件），gopkg代表输出go文件的包名（默认gobin）。
+package main var ( input = flag.String(&#34;input&#34;, &#34;&#34;, &#34;read data from input, which could be a regular file or directory&#34;) output = flag.String(&#34;output&#34;, &#34;&#34;, &#34;write transformed data to named *."><meta property="og:url" content="/blog/2020-07-25-%E5%A6%82%E4%BD%95%E5%9C%A8go%E4%BA%8C%E8%BF%9B%E5%88%B6%E7%A8%8B%E5%BA%8F%E4%B8%AD%E6%89%93%E5%8C%85%E9%9D%99%E6%80%81%E8%B5%84%E6%BA%90%E6%96%87%E4%BB%B6/"><meta property="og:site_name" content="MySpace"><meta property="article:published_time" content="2020-07-25T17:26:01+08:00"><meta property="article:modified_time" content="2020-07-25T17:26:01+08:00"><meta property="og:image" content="/doks.png"><meta property="og:image:alt" content="MySpace"><meta name=twitter:card content="summary_large_image"><meta name=twitter:site content="@hitzhangjie"><meta name=twitter:creator content="@hitzhangjie"><meta name=twitter:title content="如何在go二进制程序中打包静态资源文件"><meta name=twitter:description content><meta name=twitter:image content="/doks.png"><meta name=twitter:image:alt content="如何在go二进制程序中打包静态资源文件"><script type=application/ld+json>{"@context":"https://schema.org","@graph":[{"@type":"Person","@id":"/#/schema/person/1","name":"","url":"/","sameAs":["https://twitter.com/hitzhangjie","https://www.linkedin.com/in/hitzhangjie/","https://github.com/hitzhangjie"],"image":{"@type":"ImageObject","@id":"/#/schema/image/1","url":"/\u003cnil\u003e","width":null,"height":null,"caption":""}},{"@type":"WebSite","@id":"/#/schema/website/1","url":"/","name":"MySpace","description":"MySpace is a hitzhangjie\u0027s personal space, for blogs, books, journey, thinkings.","publisher":{"@id":"/#/schema/person/1"}},{"@type":"WebPage","@id":"/blog/2020-07-25-%E5%A6%82%E4%BD%95%E5%9C%A8go%E4%BA%8C%E8%BF%9B%E5%88%B6%E7%A8%8B%E5%BA%8F%E4%B8%AD%E6%89%93%E5%8C%85%E9%9D%99%E6%80%81%E8%B5%84%E6%BA%90%E6%96%87%E4%BB%B6/","url":"/blog/2020-07-25-%E5%A6%82%E4%BD%95%E5%9C%A8go%E4%BA%8C%E8%BF%9B%E5%88%B6%E7%A8%8B%E5%BA%8F%E4%B8%AD%E6%89%93%E5%8C%85%E9%9D%99%E6%80%81%E8%B5%84%E6%BA%90%E6%96%87%E4%BB%B6/","name":"如何在go二进制程序中打包静态资源文件","description":"","isPartOf":{"@id":"/#/schema/website/1"},"about":{"@id":"/#/schema/person/1"},"datePublished":"2020-07-25T17:26:01CET","dateModified":"2020-07-25T17:26:01CET","breadcrumb":{"@id":"/blog/2020-07-25-%E5%A6%82%E4%BD%95%E5%9C%A8go%E4%BA%8C%E8%BF%9B%E5%88%B6%E7%A8%8B%E5%BA%8F%E4%B8%AD%E6%89%93%E5%8C%85%E9%9D%99%E6%80%81%E8%B5%84%E6%BA%90%E6%96%87%E4%BB%B6/#/schema/breadcrumb/1"},"primaryImageOfPage":{"@id":"/blog/2020-07-25-%E5%A6%82%E4%BD%95%E5%9C%A8go%E4%BA%8C%E8%BF%9B%E5%88%B6%E7%A8%8B%E5%BA%8F%E4%B8%AD%E6%89%93%E5%8C%85%E9%9D%99%E6%80%81%E8%B5%84%E6%BA%90%E6%96%87%E4%BB%B6/#/schema/image/2"},"inLanguage":"","potentialAction":[{"@type":"ReadAction","target":["/blog/2020-07-25-%E5%A6%82%E4%BD%95%E5%9C%A8go%E4%BA%8C%E8%BF%9B%E5%88%B6%E7%A8%8B%E5%BA%8F%E4%B8%AD%E6%89%93%E5%8C%85%E9%9D%99%E6%80%81%E8%B5%84%E6%BA%90%E6%96%87%E4%BB%B6/"]}]},{"@type":"BreadcrumbList","@id":"/blog/2020-07-25-%E5%A6%82%E4%BD%95%E5%9C%A8go%E4%BA%8C%E8%BF%9B%E5%88%B6%E7%A8%8B%E5%BA%8F%E4%B8%AD%E6%89%93%E5%8C%85%E9%9D%99%E6%80%81%E8%B5%84%E6%BA%90%E6%96%87%E4%BB%B6/#/schema/breadcrumb/1","name":"Breadcrumbs","itemListElement":[{"@type":"ListItem","position":1,"item":{"@type":"WebPage","@id":"/","url":"/","name":"Home"}},{"@type":"ListItem","position":2,"item":{"@id":"/blog2020-07-25-%E5%A6%82%E4%BD%95%E5%9C%A8go%E4%BA%8C%E8%BF%9B%E5%88%B6%E7%A8%8B%E5%BA%8F%E4%B8%AD%E6%89%93%E5%8C%85%E9%9D%99%E6%80%81%E8%B5%84%E6%BA%90%E6%96%87%E4%BB%B6/"}}]},{"@context":"https://schema.org","@graph":[{"@type":"Article","@id":"/#/schema/article/1","headline":"如何在go二进制程序中打包静态资源文件","description":"","isPartOf":{"@id":"/blog/2020-07-25-%E5%A6%82%E4%BD%95%E5%9C%A8go%E4%BA%8C%E8%BF%9B%E5%88%B6%E7%A8%8B%E5%BA%8F%E4%B8%AD%E6%89%93%E5%8C%85%E9%9D%99%E6%80%81%E8%B5%84%E6%BA%90%E6%96%87%E4%BB%B6/"},"mainEntityOfPage":{"@id":"/blog/2020-07-25-%E5%A6%82%E4%BD%95%E5%9C%A8go%E4%BA%8C%E8%BF%9B%E5%88%B6%E7%A8%8B%E5%BA%8F%E4%B8%AD%E6%89%93%E5%8C%85%E9%9D%99%E6%80%81%E8%B5%84%E6%BA%90%E6%96%87%E4%BB%B6/"},"datePublished":"2020-07-25T17:26:01CET","dateModified":"2020-07-25T17:26:01CET","author":{"@id":"/#/schema/person/2"},"publisher":{"@id":"/#/schema/person/1"},"image":{"@id":"/blog/2020-07-25-%E5%A6%82%E4%BD%95%E5%9C%A8go%E4%BA%8C%E8%BF%9B%E5%88%B6%E7%A8%8B%E5%BA%8F%E4%B8%AD%E6%89%93%E5%8C%85%E9%9D%99%E6%80%81%E8%B5%84%E6%BA%90%E6%96%87%E4%BB%B6/#/schema/image/2"}}]},{"@context":"https://schema.org","@graph":[{"@type":"Person","@id":"/#/schema/person/2","name":null,"sameAs":[]}]},{"@context":"https://schema.org","@graph":[{"@type":"ImageObject","@id":"/blog/2020-07-25-%E5%A6%82%E4%BD%95%E5%9C%A8go%E4%BA%8C%E8%BF%9B%E5%88%B6%E7%A8%8B%E5%BA%8F%E4%B8%AD%E6%89%93%E5%8C%85%E9%9D%99%E6%80%81%E8%B5%84%E6%BA%90%E6%96%87%E4%BB%B6/#/schema/image/2","url":"/doks.png","contentUrl":"/doks.png","caption":"如何在go二进制程序中打包静态资源文件"}]}]}</script><meta name=theme-color content="#fff"><link rel=icon href=/favicon.ico sizes=any><link rel=icon type=image/svg+xml href=/favicon.svg><link rel=apple-touch-icon sizes=180x180 href=/apple-touch-icon.png><link rel=icon type=image/png sizes=32x32 href=/favicon-32x32.png><link rel=icon type=image/png sizes=16x16 href=/favicon-16x16.png><link rel=manifest crossorigin=use-credentials href=/site.webmanifest><script type=text/javascript src="https://platform-api.sharethis.com/js/sharethis.js#property=607868a58d7101001829a8df&product=sop" async></script><style>[alt~=sharing]{border:0;box-shadow:none}div#st-1{text-align:unset}div#st-1 .st-btn{height:24px;padding:0 4px}div#st-1 .st-btn>img{top:4.2px}div#st-2 .st-btn{height:24px;padding:0 4px}div#st-2 .st-btn>img{top:4.2px}</style></head><body class="blog single"><div class=sticky-top><div class=header-bar></div><header class="navbar navbar-expand-lg navbar-light doks-navbar"><nav class="container-xxl flex-wrap flex-lg-nowrap" aria-label="Main navigation"><a class="navbar-brand order-0" href=/ aria-label=MySpace>MySpace</a>
+<button class="btn btn-menu order-2 d-block d-lg-none" type=button data-bs-toggle=offcanvas data-bs-target=#offcanvasDoks aria-controls=offcanvasDoks aria-label="Open main menu"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentcolor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-menu"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button><div class="offcanvas offcanvas-end border-0 py-lg-1" tabindex=-1 id=offcanvasDoks data-bs-backdrop=true aria-labelledby=offcanvasDoksLabel><div class="header-bar d-lg-none"></div><div class="offcanvas-header d-lg-none"><h2 class="h5 offcanvas-title ps-2" id=offcanvasDoksLabel><a class=text-dark href=/>MySpace</a></h2><button type=button class="btn-close text-reset me-2" data-bs-dismiss=offcanvas aria-label="Close main menu"></button></div><div class="offcanvas-body p-4 p-lg-0"><ul class="nav flex-column flex-lg-row align-items-lg-center mt-2 mt-lg-0 ms-lg-2 me-lg-auto"><li class=nav-item><a class="nav-link ps-0 py-1 active" href=/blog/>Blog</a></li><li class=nav-item><a class="nav-link ps-0 py-1" href=/books/>Books</a></li><li class=nav-item><a class="nav-link ps-0 py-1" href=/journey/introduction>Journey</a></li></ul><hr class="text-black-50 my-4 d-lg-none"><form class="doks-search position-relative flex-grow-1 ms-lg-auto me-lg-2"><input id=search class="form-control is-search" type=search placeholder="Search docs..." aria-label="Search docs..." autocomplete=off><div id=suggestions class="shadow bg-white rounded d-none"></div></form><hr class="text-black-50 my-4 d-lg-none"><ul class="nav flex-column flex-lg-row"><li class=nav-item><a class="nav-link social-link" href=https://twitter.com/hitzhangjie><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentcolor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-twitter"><path d="M23 3a10.9 10.9.0 01-3.14 1.53 4.48 4.48.0 00-7.86 3v1A10.66 10.66.0 013 4s-4 9 5 13a11.64 11.64.0 01-7 2c9 5 20 0 20-11.5a4.5 4.5.0 00-.08-.83A7.72 7.72.0 0023 3z"/></svg><small class="ms-2 d-lg-none">Twitter</small></a></li><li class=nav-item><a class="nav-link social-link" href=https://github.com/hitzhangjie><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentcolor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-github"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37.0 00-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44.0 0020 4.77 5.07 5.07.0 0019.91 1S18.73.65 16 2.48a13.38 13.38.0 00-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07.0 005 4.77 5.44 5.44.0 003.5 8.55c0 5.42 3.3 6.61 6.44 7A3.37 3.37.0 009 18.13V22"/></svg><small class="ms-2 d-lg-none">GitHub</small></a></li></ul></div></div></nav></header></div><div class="wrap container-xxl" role=document><div class=content><div class="row flex-xl-nowrap"><div class="col-lg-5 col-xl-4 docs-sidebar"><nav class=docs-links aria-label="Main navigation"><h3>Tag List</h3><ol><li><a href=/tags/go/>go</a></li><li><a href=/tags/bindata/>bindata</a></li></ol></nav></div><nav class="docs-toc d-none d-xl-block col-xl-3" aria-label="Secondary navigation"><div class=page-links><h3>On this page</h3><nav id=TableOfContents><ul><li><a href=#why>Why?</a></li><li><a href=#how>How?</a></li><li><a href=#lets-do-it>Let&rsquo;s Do it!</a><ul><li><a href=#功能分析>功能分析</a></li><li><a href=#功能实现>功能实现</a></li></ul></li></ul></nav></div></nav><main class="docs-content col-lg-11 col-xl-9"><h1>如何在go二进制程序中打包静态资源文件</h1><div style=display:flex><div>分享:&nbsp;&nbsp;</div><div><div class=sharethis-inline-share-buttons></div></div></div><hr><p class=lead></p><h1 id=why>Why? <a href=#why class=anchor aria-hidden=true>#</a></h1><p>有时我们希望在go二进制程序中打包一些静态资源文件，目的可能有多种，比较常见的是为了简化安装。通常我们安装一个go编写的工具，更倾向于使用 <code>go get $repo</code> 的方式来完成，这似乎已经成为了一种共识。当然，也有些项目还依赖一些静态资源文件，这些静态资源文件是不会被自动安装的，就需要借助其他方式来完成静态资源的安装，比如通过install.sh脚本，后者Makefile构建脚本等等。</p><p>今天，我想讨论下，如何简单快速地支持静态资源打包到二进制程序中，以及在二进制程序中对这些静态资源加以引用。</p><h1 id=how>How? <a href=#how class=anchor aria-hidden=true>#</a></h1><p>github上已经有不少开发者在探索，方法其实都比较雷同，大致思路就是：</p><ul><li>读取静态资源文件，转换成bytes数据；</li><li>内部提供一些类似文件系统的接口，提供文件名，返回文件数据；</li><li>blabla&mldr;</li></ul><p>开发者的需求，可能不完全一致，比如：</p><ul><li>我想像遍历本地文件系统一样遍历文件目录，不只是提供一个文件名返回一个文件；</li><li>我的代码已经写完了，我只想做最小修改，将静态资源文件打包到二进制程序中，而后还原回文件系统；</li><li>我的代码不需要支持类似文件服务器的功能，不需要那么多华丽呼哨的功能；</li></ul><p>开发者提供了很多类似的实现，这里有篇文章可供参考：https://tech.townsourced.com/post/embedding-static-files-in-go/。能工模形，巧匠窃意。其实在大致了解了实现的方式之后，就懒得再去学如何使用这些五花八门的第三方工具了。说真的，真的没几个好用的，至少从我的角度来说。可能它设计的比较通用，但是与我来说没有用处，我追求极简。</p><p>而且，go官方是有意来支持打包静态资源的，关于这一点，已经有issue在跟进讨论：https://github.com/golang/go/issues/35950。</p><p>尽管现在的状态还是Proposal-Hold状态，但是我觉得这个feature的到来也不会等很久了，anyway，我不想在这些即将被淘汰的三方工具上浪费学习的时间、改写代码的时间。</p><p>所以呢，为什么不简单一点，自己写一个当下比较适用项目本身的？写这个东西花不了二十分钟时间！</p><h1 id=lets-do-it>Let&rsquo;s Do it! <a href=#lets-do-it class=anchor aria-hidden=true>#</a></h1><h2 id=功能分析>功能分析 <a href=#%e5%8a%9f%e8%83%bd%e5%88%86%e6%9e%90 class=anchor aria-hidden=true>#</a><a href=#功能分析 class=anchor aria-hidden=true>#</a></h2><p>我理解实现打包静态资源文件，有这么几个点需要考虑：</p><ul><li>提供一个小工具，通过它可以反复执行类似的静态资源打包的操作；</li><li>可以指定一个文件或者目录，将其转换成一个go文件放入项目中，允许编译时连接；</li><li>go文件可以通过导出变量的形式，导出文件数据，允许在其他go代码中引用文件的内容；</li><li>静态资源文件可能有很多，希望能对文件内容进行压缩，以便减小go binary文件尺寸；</li><li>通常是本地组织好静态资源文件，写代码、测试ok、最后发布前希望将其打包到go binary，打包、解包、使用静态资源要最小化项目代码修改；</li></ul><h2 id=功能实现>功能实现 <a href=#%e5%8a%9f%e8%83%bd%e5%ae%9e%e7%8e%b0 class=anchor aria-hidden=true>#</a><a href=#功能实现 class=anchor aria-hidden=true>#</a></h2><p>我们先实现这个打包静态资源的工具，需要这几个参数：input、output，分别代表输入文件（or 目录）、输出文件名（go文件），gopkg代表输出go文件的包名（默认gobin）。</p><pre><code class=language-go>package main
+
+var (
+	input  = flag.String(&quot;input&quot;, &quot;&quot;, &quot;read data from input, which could be a regular file or directory&quot;)
+	output = flag.String(&quot;output&quot;, &quot;&quot;, &quot;write transformed data to named *.go, which could be linked with binary&quot;)
+	gopkg  = flag.String(&quot;gopkg&quot;, &quot;gobin&quot;, &quot;write transformed data to *.go, whose package is $package&quot;)
+)
+</code></pre><p>我们的工具将从input对应的文件中读取文件内容，并转换成一个output对应的go文件中的导出变量。如果input是一个目录呢，我们则需要对目录下文件进行遍历处理。由于静态资源文件数据可能较大，这里需要进行gzip压缩（对于文本压缩率可高达80%左右）有助于减少go binary文件尺寸。</p><p>那读取到文件内容之后，如何将其转换成go文件中的导出变量呢？很简单，我们定义一个go模板，将读取到的文件内容gzip压缩后转换成bytes数组传递给模板引擎就可以了。模板中的{{.GoPackage}}将引用命令选项$gopkg的值，{{.Variable}}即为导出变量的值，这里我们会使用选项$input对应的CamelCase转换之后的文件名（或目录名），{{.Data}}即为gzip压缩后的文件数据。</p><pre><code class=language-go>var tpl = `package {{.GoPackage}}
+var {{.Variable}} = []uint8{
+{{ range $idx, $val := .Data }}{{$val}},{{ end }}
+}`
+</code></pre><p>接下来，我们看下怎么读取文件的内容，再强调下，要读取的内容可能是单个文件，也可能是一个目录。</p><pre><code class=language-go>// ReadFromInputSource 从输入读取内容，可以是一个文件，也可以是一个目录（会先gzip压缩然后再返回内容）
+func ReadFromInputSource(inputSource string) (data []byte, err error) {
+
+	_, err := os.Lstat(inputSource)
+	if err != nil {
+		return nil, err
+	}
+
+	buf := bytes.Buffer{}
+	err = compress.Tar(inputSource, &amp;buf)
+	if err != nil {
+		return nil, err
+	}
+
+	return buf.Bytes(), nil
+}
+</code></pre><p>gzip对文件数据进行压缩，篇幅原因，这里只贴个链接地址，感兴趣的可以自行查看：https://github.com/hitzhangjie/codemaster/blob/master/compress/compress.go。</p><p>好，现在我们将这个打包工具的完整逻辑再完整梳理一下。</p><pre><code class=language-go>func main() {
+
+	// 输入输出参数校验
+	if len(*input) == 0 || len(*gopkg) == 0 {
+		fmt.Println(&quot;invalid argument: invalid input&quot;)
+		os.Exit(1)
+	}
+
+	// 读取输入内容
+	buf, err := ReadFromInputSource(*input)
+	if err != nil {
+		fmt.Errorf(&quot;read data error: %v\n&quot;, err)
+		os.Exit(1)
+	}
+
+	// 将内容转换成go文件写出
+	inputBaseName := filepath.Base(*input)
+	if len(*output) == 0 {
+		*output = fmt.Sprintf(&quot;%s_bindata.go&quot;, inputBaseName)
+	}
+
+	outputDir, outputBaseName := filepath.Split(*output)
+	tplInstance, err := template.New(outputBaseName).Parse(tpl)
+	if err != nil {
+		fmt.Printf(&quot;parse template error: %v\n&quot;, err)
+		os.Exit(1)
+	}
+	_ = os.MkdirAll(outputDir, 0777)
+
+	fout, err := os.OpenFile(*output, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0666)
+	if err != nil {
+		fmt.Printf(&quot;open input error: %v&quot;, err)
+		os.Exit(1)
+	}
+
+	err = tplInstance.Execute(fout, &amp;struct {
+		GoPackage string
+		Variable  string
+		Data      []uint8
+	}{
+		GoPackage: *gopkg,
+		Variable:  strcase.ToCamel(outputBaseName),
+		Data:      buf,
+	})
+	if err != nil {
+		panic(fmt.Errorf(&quot;template execute error: %v&quot;, err))
+	}
+
+	fmt.Printf(&quot;ok, filedata stored to %s\n&quot;, *output)
+}
+</code></pre><p>下面我们演示下如何使用这个工具来对静态资源打包。</p><p>假定存在如下静态资源目录static，其下包含了多个文件，现在我想将其全部打包到一个go文件中。</p><pre><code class=language-bash>$ tree .
+
+.
+|- static
+    |- file1.txt
+    |- file2.txt
+    |- file3.txt
+</code></pre><p>运行 <code>go build -v bindata</code> 编译我们之前写的工具，然后运行 <code>bindata -input=path/to/static -output=goin/static.go -gopkg=gobin</code>。</p><pre><code class=language-bash>$ tree .
+
+.
+|- static
+    |- file1.txt
+    |- file2.txt
+    |- file3.txt
+
+|- gobin
+    |- static.go
+</code></pre><p>我们看到当前目录下多生成了一个gobin目录，其下多了个go文件static.go，查看下文件内容：</p><pre><code class=language-bash>$ cat gobin/static.go
+
+package gobin
+
+var StaticGo = []uint8{
+31,139,8,0,0,0,0,0,0,255,236,213,193,10,194,48,12,128,225,158,125,138,62,129,36,77,219,60,79,15,171,171,136,7,91,65,124,122,105,39,131,29,244,182,58,89,190,75,24,140,209,145,253,44,166,203,128,199,242,40,106,61,0,0,222,218,54,217,187,54,193,76,215,13,178,66,98,240,236,25,136,21,32,121,100,165,97,197,51,205,238,185,132,155,2,120,142,225,122,58,167,225,211,125,185,132,24,191,60,231,253,42,243,252,19,101,76,89,167,172,235,119,160,241,240,235,227,136,206,234,222,205,150,250,183,78,250,239,104,209,191,145,254,247,166,238,157,182,212,191,155,254,255,134,164,255,30,22,253,147,244,47,132,16,123,241,10,0,0,255,255,106,242,211,179,0,16,0,0,
+}
+</code></pre><p>哈哈，现在看到static目录及其下的文件已经被完整打包到一个go文件中了，且通过导出变量进行了导出，后续使用的时候，可以先将其还原到本地文件系统，以前已经写好的代码不用做任何修改，怎么还原到本地文件系统呢，并使用呢？</p><pre><code class=language-go>// 在你需要引用这些静态资源的package中释放这些静态资源文件到本地文件系统
+func init() {
+    compress.UnTar(path/to/static, bytes.NewBuffer(gobin.StaticGo))
+
+    val := config.Read(path/to/static/file1.go, &quot;section&quot;, &quot;property&quot;, defaultValue)
+    ...
+}
+</code></pre><p>现在，是不是感觉超级简单呢？:)</p><div class=edit-page><a href=https://github.com/hitzhangjie/myspace/blob/master/content/blog/2020-07-25-%e5%a6%82%e4%bd%95%e5%9c%a8go%e4%ba%8c%e8%bf%9b%e5%88%b6%e7%a8%8b%e5%ba%8f%e4%b8%ad%e6%89%93%e5%8c%85%e9%9d%99%e6%80%81%e8%b5%84%e6%ba%90%e6%96%87%e4%bb%b6.md><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentcolor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-edit-2"><path d="M17 3a2.828 2.828.0 114 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>Edit this page on GitHub</a></div><div class="docs-navigation d-flex justify-content-between"><a href=/blog/2020-07-31-%E4%BD%BF%E7%94%A8awgo%E5%BC%80%E5%8F%91alfred.workflow/><div class="card my-1"><div class="card-body py-2">&larr; 使用awgo开发alfred.workflow</div></div></a><a class=ms-auto href=/blog/2019-01-07-%E4%BD%A0%E4%B8%8D%E8%AE%A4%E8%AF%86%E7%9A%84cc-volatile/><div class="card my-1"><div class="card-body py-2">你不认识的cc++ volatile &rarr;</div></div></a></div></main></div></div></div><footer class="footer text-muted"><div class=container-xxl><div class=row><div class="col-lg-8 order-last order-lg-first"><ul class=list-inline><li class=list-inline-item>Powered by <a class=text-muted href=https://www.netlify.com/>Netlify</a>, <a class=text-muted href=https://gohugo.io/>Hugo</a>, and <a class=text-muted href=https://getdoks.org/>Doks</a></li></ul></div><div class="col-lg-8 order-first order-lg-last text-lg-end"><ul class=list-inline></ul></div><div class=col-lg-8 align=right><p><font size=-1>站点构建版本：v</font></p></div></div></div></footer><script src=/js/bootstrap.min.fdbe9b9ba88a036135318f3c721784d684ac9e3280fe282cc80d7d49f7f9c82780cd54228c1608685a230c09984300d7946fc471734d566fcebc148b65bd16db.js integrity="sha512-/b6bm6iKA2E1MY88cheE1oSsnjKA/igsyA19Sff5yCeAzVQijBYIaFojDAmYQwDXlG/EcXNNVm/OvBSLZb0W2w==" crossorigin=anonymous defer></script>
+<script src=/js/highlight.min.451fe6185924dcedf55c767559b5130f666f31c989f0078a75bafc346ad7364e180edfd731b1ca6bae0e90dfee88842885d284126ab0879f5067399e3a02b09e.js integrity="sha512-RR/mGFkk3O31XHZ1WbUTD2ZvMcmJ8AeKdbr8NGrXNk4YDt/XMbHKa64OkN/uiIQohdKEEmqwh59QZzmeOgKwng==" crossorigin=anonymous defer></script>
+<script src=/main.min.f16ffd9b364013a1df84be9cd7a45c470cb48639766bf5551e05bba845fe4ab150cb6436de43609bfed9af47c23bd5e395e9a10b932fa6fb2c4ee8f6cc78d7a3.js integrity="sha512-8W/9mzZAE6HfhL6c16RcRwy0hjl2a/VVHgW7qEX+SrFQy2Q23kNgm/7Zr0fCO9XjlemhC5MvpvssTuj2zHjXow==" crossorigin=anonymous defer></script>
+<script src=/index.min.4f5da6d5d5039814b7640914dc6d7af9b1826b54a2e8027123e345920f33e3dab6f98ed3b275444c8e3ce3de9faa12475d34fad04a0140d0a99b28e75bc5267c.js integrity="sha512-T12m1dUDmBS3ZAkU3G16+bGCa1Si6AJxI+NFkg8z49q2+Y7TsnVETI48496fqhJHXTT60EoBQNCpmyjnW8UmfA==" crossorigin=anonymous defer></script></body></html>

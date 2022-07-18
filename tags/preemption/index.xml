@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>preemption on</title><link>/tags/preemption/</link><description>Recent content in preemption on</description><generator>Hugo -- gohugo.io</generator><language>en-US</language><lastBuildDate>Tue, 25 May 2021 13:13:52 +0800</lastBuildDate><atom:link href="/tags/preemption/index.xml" rel="self" type="application/rss+xml"/><item><title>go抢占式调度</title><link>/blog/2021-05-25-go%E6%8A%A2%E5%8D%A0%E5%BC%8F%E8%B0%83%E5%BA%A6/</link><pubDate>Tue, 25 May 2021 13:13:52 +0800</pubDate><guid>/blog/2021-05-25-go%E6%8A%A2%E5%8D%A0%E5%BC%8F%E8%B0%83%E5%BA%A6/</guid><description>SIGURG，在信号处理函数runtime/signal_unix.go:sighandler(&amp;hellip;)函数中又看到对sigPreempt的处理。
+SIGURG实现抢占式调度： 对应这个函数doSigPreempt，检查当前g是不是wantAsyncPreempt，ok的话检查是不是isAsyncSafePoint，ok的话，sigctxt.pushCall(funcPC(asyncPreempt), newpc)，这个函数调整PC并注入一个对asyncPreempt的调用。
+TODO wantAsyncPreempt对应的判断参数是谁去设置的，什么时候设置的？
+TODO isAsyncSafePoint，safepoint的含义？这个函数的注释以及代码中的if-else已经足够结实清楚什么是safepoint了，以及safepoint的意义了。
+看下asyncPreempt的逻辑，该函数是在汇编中实现的，首先保存寄存器的值，然后调用asyncPreempt2执行其他处理。
+g.preemptStop决定是挂起g还是重新调度g：
+如果被抢占的g的g.preemptStop为true，则执行mcall(preemptPark)挂起该g，g的状态被改为preempted，后面什么时机会重新调度它吧。然后执行schedule调度其他goroutine执行； 如果g.preemptStop为false，则mcall(gopreempt_m)将g从running改为runnable重新调度一次。 大致的抢占式调度逻辑就是这样的。
+ps: func mcall(fn func(*g))，mcall switches from the g to the g0 stack and invokes fn(g), where g is the goroutine that made the call.</description></item></channel></rss>

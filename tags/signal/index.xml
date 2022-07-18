@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>signal on</title><link>/tags/signal/</link><description>Recent content in signal on</description><generator>Hugo -- gohugo.io</generator><language>en-US</language><lastBuildDate>Tue, 25 May 2021 11:32:39 +0800</lastBuildDate><atom:link href="/tags/signal/index.xml" rel="self" type="application/rss+xml"/><item><title>go程序信号处理过程</title><link>/blog/2021-05-25-go%E7%A8%8B%E5%BA%8F%E4%BF%A1%E5%8F%B7%E5%A4%84%E7%90%86%E8%BF%87%E7%A8%8B/</link><pubDate>Tue, 25 May 2021 11:32:39 +0800</pubDate><guid>/blog/2021-05-25-go%E7%A8%8B%E5%BA%8F%E4%BF%A1%E5%8F%B7%E5%A4%84%E7%90%86%E8%BF%87%E7%A8%8B/</guid><description>go信号处理基础 # go os.signal package对信号处理做了封装，其中信号SIGKILL、SIGSTOP是操作系统规定的不允许捕获的信号，是不受os.signal这个package影响的
+go中将信号分为两类：同步信号和异步信号。
+同步信号：指的是go程序运行时程序内部错误触发的一些问题，如SIGBUS、SIGFPE、SIGSEGV，这些信号会被转换成运行时panic信息；
+异步信号：除了上述提及的信号之外的信号，就是异步信号了。异步信号不是程序内部错误导致的，而是由操作系统或者外部其他程序发送给它的。
+有哪些异步信号？ # 当程序失去对控制终端的控制时，会收到SIGHUP信号； 在控制终端中输入Ctrl+C时会收到SIGINT信号； 在控制终端中输入Ctrl+\时会受到SIGQUIT信号； ps：通常想让程序退出的话，Ctrl+C就可以了，如果想让程序退出同时打印栈转储信息，那就用Ctrl+\。
+默认的信号处理方式？ # 接收到信号之后，肯定有默认的处理方式，这个在学习linux信号处理时肯定有了解过的，在go程序中可能只是默认处理方式有点不同，这个有需要的时候去了解就可以了。这里不展开了。
+值得一提的是信号SIGPROF，这个信号用于实现runtime.CPUProfile。
+自定义信号处理方式？ # 自定义信号处理方式，在linux signal函数中可以指定信号及对应对应的处理函数，go中类似，它允许通过os.Notify指定一个或多个信号chan，里面可以注册感兴趣的信号，当收到这些信号时，就可以执行用户自定义的信号处理逻辑。
+SIGPIPE信号处理 # 当程序write broken pipe时，会收到SIGPIPE信号，比如写网络连接失败，如果不做处理默认崩溃掉那就完蛋了。go程序中对这个做了优化处理。
+write broken pipe的行为与write的file descriptor的fd有关系：
+如果fd是stdout、stderr，那么程序收到SIGPIPE信号，默认行为是程序会退出； 如果是其他fd，程序收到SIGPIPE信号，默认行为是不采取任何动作，对应的write操作返回一个EPIPE错误； ps：后者很重要，写网络连接失败是常有的事情，linux c程序如果不显示处理SIGPIPE信号，默认行为将是程序直接crash，go程序对此作了优化，让write返回error而非crash，对于go将构建高性能、稳定健壮的网络程序的初衷来说是有必要的。
+cgo程序信号处理？ # 涉及到cgo就要分几种情况来讨论，这里会有点麻烦了，涉及到信号处理函数的重复注册、信号掩码设置、信号处理函数的栈等问题，在os/signal/doc.go里面有这方面的描述，这里不赘述。
+go信号处理过程 # 介绍了go程序内部的信号处理过程。GMP调度模型里面，每个M都有一个独立的gsignal goroutine，系统投递信号给进程时实际上是有gsignal goroutine来接受这个信号，然后检查下是否可处理。如果可处理就将其push到一个信号队列中，然后有一个专门的goroutine执行signal.loop，这个函数从上述信号队列中取信号，并转移到用户自定义的chan os.Signal中，再由我们自己写的chan read代码消费，并执行处理。
+对应到源码中主要有几个函数：
+对应到源码中主要有几个函数：
+os/signal/signal.go：这个函数里面在func init()的时候有启动一个loop函数，这个函数内调用runtime.signal_recv来不停地接收信号，然后检查程序通过os.Notify为哪些chan os.Signal订阅了该信号，就将该信号push到对应的chan中，后面应用程序就可以自行处理了；
+runtime/sigqueue.go：runtime.sigsend、runtime.signal_recv这两个函数很重要，前者是程序收到系统发送来的信号时将信号写入outgoing sigqueue中，其实就是sig结构体的mask字段，后面signal_recv的时候也是从该mask字段读取，并写入recv字段中，recv中非0的应该就是表示收到了信号（信号编号为索引值）；
+runtime/signal_unix.go：有个函数sighandler，这个函数负责对不同的信号执行不同的处理，比如抢占式调度SIGURG的处理，比如SIGPROF的处理，比如我们这里讨论的一些异步信号的处理sigsend。在go程序中不管是什么信号，这些信号是在sighandler做不同处理。sighandler虽然名字是信号处理函数，我们也看到了通过setsig将所有信号全部设置sighandler为信号处理函数，但是其实这只是表现。setsig函数内部又做了一个转换，将信号的信号处理函数设置为了sigtramp活着cgosigtramp，这些函数内部又调用sighandler。下面会提到sigtramp的逻辑；
+runtime/runtime2.</description></item></channel></rss>

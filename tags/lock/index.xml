@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>lock on</title><link>/tags/lock/</link><description>Recent content in lock on</description><generator>Hugo -- gohugo.io</generator><language>en-US</language><lastBuildDate>Mon, 27 Jun 2022 01:15:41 +0800</lastBuildDate><atom:link href="/tags/lock/index.xml" rel="self" type="application/rss+xml"/><item><title>并发同步</title><link>/blog/%E5%B9%B6%E5%8F%91%E5%90%8C%E6%AD%A5/</link><pubDate>Mon, 27 Jun 2022 01:15:41 +0800</pubDate><guid>/blog/%E5%B9%B6%E5%8F%91%E5%90%8C%E6%AD%A5/</guid><description>并发同步，在并发编程中是非常重要的。当我们讨论并发编程时，我们的程序可能是通过多线程来实现，也可能通过多进程来实现。
+我们在OS理论中了解到进程是资源分配的最小单位，线程是调度的最小单位。在Linux里面，这么讲也是成立的。更细致地说，在Linux中，线程其实就是轻量级进程LWP来表示的。对Linux调度器而言，可调度实体既可以是进程、线程也可以是一个任务组，这个任务组中又可以有其他的可调度实体。
+有两个问题：
+当我们在单进程多线程中该如何通过？
+当我们在多个进程间进行同步时该如何同步？
+我们常用的同步的措施包括：
+mutex/rwmutex semaphore condition variable 我们处理最多的可能就是单进程多线程情况下的同步，使用上面这些来处理没啥好说的。现在思考下，如果要实现多个进程之间的同步，有没有办法呢？
+这些玩意的实现，本质上是基于处理器指令lock addr锁总线的这一基础控制，一步步实现了CAS、Spinlock、mutex/semaphore/condvar。所以其核心就是利用了锁一个内存地址总线来实现。
+ok，那么假设我们在当前进程全局变量中初始化了一个mutex变量，然后fork下当前进程，然后**父子进程能通过这个mutex变量进行同步控制吗？**不能！因为父子进程中复制后mutex是两个不同的内存变量，这两个变量的内存地址是不同的，其实就是两个不同的锁，所以无法通过这个mutex进行正确的同步控制。
+那怎么办呢？我们只要在共享的内存空间里面来初始化这个mutex变量就可以了（关键的就是lock的底层的内存地址一样就可以了），比如通过：
+buffer = (*buffer_t)mmap(NULL,4,devzeroFD,MAP_SHARED)，
+然后将buffer-&amp;gt;lock作为mutex变量进行初始化，因为mmap映射的时候指定了共享模式，此时初始化写内存时也是共享的，fork的子进程初始化时其实也是同一个锁（已经初始化过不会重复初始化吧？），然后后续加解锁都是在相同的地址上了，这个很好理解，映射的是同一段内存。就能正常完成多个进程之间的同步控制。
+其他的rwmutex/semaphore/condvar，理论上也可以通过相似的方法来实现。
+reference:
+1: 多进程并发同步控制, Synchronization Across Process Boundaries
+2: 支持优先级继承的锁, Priority Inheritance Mutex</description></item><item><title>Locks实现:背后不为人知的故事</title><link>/blog/2021-04-17-locks%E5%AE%9E%E7%8E%B0%E9%82%A3%E4%BA%9B%E4%B8%8D%E4%B8%BA%E4%BA%BA%E7%9F%A5%E7%9A%84%E6%95%85%E4%BA%8B/</link><pubDate>Sat, 17 Apr 2021 11:32:36 +0800</pubDate><guid>/blog/2021-04-17-locks%E5%AE%9E%E7%8E%B0%E9%82%A3%E4%BA%9B%E4%B8%8D%E4%B8%BA%E4%BA%BA%E7%9F%A5%E7%9A%84%E6%95%85%E4%BA%8B/</guid><description>从事软件开发多年的你，真的理解locks背后的那些故事吗？锁是如何实现的，无锁指的又是什么，无锁真的移除了任何同步操作吗？为什么大家总是谈锁色变，锁的开销真的有那么大吗，平时编码中又该注意些什么呢？本文将结合go sync.Mutex对这些问题进行讨论。
+并发：我们关心什么 # 并发编程，开发人员应该对原子性、指令重排有深刻的认识。
+原子性 # 大家都了解过数据库事务的原子性，类似地，程序中也经常有些操作也需要达到类似的效果——被某种类似事务的机制“保护”起来，要么全部执行要么全部不执行。通常我们将这样需要保护的代码段称为临界区。我们希望临界区内的代码要么全部执行要么全部不执行，达到这种原子性的效果。
+其实不只是代码段，给一个int变量赋值，也需要考虑原子性，因为在不同的操作系统、处理器平台上，可能一个简单的int变量赋值需要涉及多条机器指令，而在多条指令执行期间，则可能发生各种事件，比如被其他CPU核的赋值指令写乱了同一变量的数据。设想下一个int变量4字节，但是处理器平台只有16位mov指令。再或者执行i++（i为int类型）操作，实际上是包含了read-modify-write三个操作，这几个操作中间也可能插入其他指令执行。当然一条机器指令也可能不是原子的，比如add src, dst，src和dst都是内存地址，这里就涉及到读取src和dst、计算、写回dst的多个操作……更不用说一个包含了多个字段的struct结构体的赋值了。
+这类原子性问题，可以通过一些相当低级的原子操作来保证，如int变量i++，可以考虑lock add指令（假定操作数位宽和int变量相同），稍复杂的数据结构（如struct）也可以使用一些“高级锁”来做同步保证，如go中的sync.Mutex。
+指令重排 # 指令重排的根源在于CPU的设计，古老的CPU只有一条取指、译码、执行、访存、写回的功能电路。联想下假如一个单线程程序执行阻塞网络IO的时候会发生什么，整个程序全阻塞在这里干不了其他的。CPU也存在类似问题，假如一条指令执行过程中因为数据没ready的问题不能执行，或者碰到多CPU多核间cache一致性同步，那CPU会stall，后续的指令都无法执行。
+所以CPU为了提高指令吞吐，增加了多条流水线设计，可以同时执行多条指令的取指、译码、执行、访存、写回，当然这其中有些指令是有数据依赖的，现代处理器支持寄存器重命名、指令乱序执行、重排序缓冲等功能，都是保证CPU执行效率的常用手段。如果想了解这方面的内容，see Computer Architecture: Dynamic Execution Core及系列课程Computer Architecture。这里贴一张超标量处理器的简图，方便大家理解这些优化手段所在的位置：
+为什么要指令重排：
+为什么要指令重排呢？
+因为希望提高cpu指令吞吐，就要并行执行指令，要并行执行指令，就要分析出哪些指令之间有数据依赖的，表面上一个架构寄存器RAX可能被相邻多条指令使用，但是可能是一个伪数据依赖，就需要通过分析、寄存器重命名（如RAX重命名为物理寄存器R11）来消除伪数据依赖，从而允许其在执行阶段并行执行（out-of-order）。
+一条指令的执行过程，会分为多个阶段，有些阶段是按序执行的（in-order），有些则是乱序执行的（out-of-order）。在指令乱序执行之后，可能会对程序正确性造成影响？影响究竟有多大，就需要参考硬件内存一致性模型，比如Intel x86处理器采用的是TSO模型（Total Store Order）, see x86-TSO: A Rigorous and Usable Programmer&amp;rsquo;s Model for x86 Multiprocessors。
+指令重排带来的问题：
+指令在CPU乱序执行，在某些并发场景下，可能会带来一些微妙的问题。比如：
+type num struct { a int b int } n := &amp;amp;num{} go func() { n.a = 1; n.b = 2; }() // g1 go func() { n.</description></item></channel></rss>

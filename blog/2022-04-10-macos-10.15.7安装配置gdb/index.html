@@ -1,0 +1,112 @@
+<!doctype html><html lang=en-us><head><meta charset=utf-8><meta http-equiv=x-ua-compatible content="ie=edge"><meta name=viewport content="width=device-width,initial-scale=1,shrink-to-fit=no"><link rel=preload as=font href=/fonts/vendor/jost/jost-v4-latin-regular.woff2 type=font/woff2 crossorigin><link rel=preload as=font href=/fonts/vendor/jost/jost-v4-latin-500.woff2 type=font/woff2 crossorigin><link rel=preload as=font href=/fonts/vendor/jost/jost-v4-latin-700.woff2 type=font/woff2 crossorigin><link rel=stylesheet href=/main.63b6b8ff933309fcc94a30e21d69932290c8643fa1a32893f5681778c776ed3e51c237a1acd00b42426b3bf780c351b4a6ce75b3b659915ef0dd610b2e027a8c.css integrity="sha512-Y7a4/5MzCfzJSjDiHWmTIpDIZD+hoyiT9WgXeMd27T5RwjehrNALQkJrO/eAw1G0ps51s7ZZkV7w3WELLgJ6jA==" crossorigin=anonymous><noscript><style>img.lazyload{display:none}</style></noscript><meta name=robots content="index, follow"><meta name=googlebot content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1"><meta name=bingbot content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1"><title>macOS 10.15.7安装配置gdb - MySpace</title><meta name=description content="macOS darwin内核的调整导致gdb无法正常工作，本文总结了权限问题、调试卡死问题的一种解决办法，亲测可用。但是该办法只是绕过了某些异常，并没有彻底修复gdb的bug"><link rel=canonical href=/blog/2022-04-10-macos-10.15.7%E5%AE%89%E8%A3%85%E9%85%8D%E7%BD%AEgdb/><meta property="og:locale" content="en_US"><meta property="og:type" content="article"><meta property="og:title" content="macOS 10.15.7安装配置gdb"><meta property="og:description" content="macOS darwin内核的调整导致gdb无法正常工作，本文总结了权限问题、调试卡死问题的一种解决办法，亲测可用。但是该办法只是绕过了某些异常，并没有彻底修复gdb的bug"><meta property="og:url" content="/blog/2022-04-10-macos-10.15.7%E5%AE%89%E8%A3%85%E9%85%8D%E7%BD%AEgdb/"><meta property="og:site_name" content="MySpace"><meta property="article:published_time" content="2022-04-10T13:05:20+08:00"><meta property="article:modified_time" content="2022-04-10T13:05:20+08:00"><meta property="og:image" content="/doks.png"><meta property="og:image:alt" content="MySpace"><meta name=twitter:card content="summary_large_image"><meta name=twitter:site content="@hitzhangjie"><meta name=twitter:creator content="@hitzhangjie"><meta name=twitter:title content="macOS 10.15.7安装配置gdb"><meta name=twitter:description content="macOS darwin内核的调整导致gdb无法正常工作，本文总结了权限问题、调试卡死问题的一种解决办法，亲测可用。但是该办法只是绕过了某些异常，并没有彻底修复gdb的bug"><meta name=twitter:image content="/doks.png"><meta name=twitter:image:alt content="macOS 10.15.7安装配置gdb"><script type=application/ld+json>{"@context":"https://schema.org","@graph":[{"@type":"Person","@id":"/#/schema/person/1","name":"","url":"/","sameAs":["https://twitter.com/hitzhangjie","https://www.linkedin.com/in/hitzhangjie/","https://github.com/hitzhangjie"],"image":{"@type":"ImageObject","@id":"/#/schema/image/1","url":"/\u003cnil\u003e","width":null,"height":null,"caption":""}},{"@type":"WebSite","@id":"/#/schema/website/1","url":"/","name":"MySpace","description":"MySpace is a hitzhangjie\u0027s personal space, for blogs, books, journey, thinkings.","publisher":{"@id":"/#/schema/person/1"}},{"@type":"WebPage","@id":"/blog/2022-04-10-macos-10.15.7%E5%AE%89%E8%A3%85%E9%85%8D%E7%BD%AEgdb/","url":"/blog/2022-04-10-macos-10.15.7%E5%AE%89%E8%A3%85%E9%85%8D%E7%BD%AEgdb/","name":"macOS 10.15.7安装配置gdb","description":"macOS darwin内核的调整导致gdb无法正常工作，本文总结了权限问题、调试卡死问题的一种解决办法，亲测可用。但是该办法只是绕过了某些异常，并没有彻底修复gdb的bug","isPartOf":{"@id":"/#/schema/website/1"},"about":{"@id":"/#/schema/person/1"},"datePublished":"2022-04-10T13:05:20CET","dateModified":"2022-04-10T13:05:20CET","breadcrumb":{"@id":"/blog/2022-04-10-macos-10.15.7%E5%AE%89%E8%A3%85%E9%85%8D%E7%BD%AEgdb/#/schema/breadcrumb/1"},"primaryImageOfPage":{"@id":"/blog/2022-04-10-macos-10.15.7%E5%AE%89%E8%A3%85%E9%85%8D%E7%BD%AEgdb/#/schema/image/2"},"inLanguage":"","potentialAction":[{"@type":"ReadAction","target":["/blog/2022-04-10-macos-10.15.7%E5%AE%89%E8%A3%85%E9%85%8D%E7%BD%AEgdb/"]}]},{"@type":"BreadcrumbList","@id":"/blog/2022-04-10-macos-10.15.7%E5%AE%89%E8%A3%85%E9%85%8D%E7%BD%AEgdb/#/schema/breadcrumb/1","name":"Breadcrumbs","itemListElement":[{"@type":"ListItem","position":1,"item":{"@type":"WebPage","@id":"/","url":"/","name":"Home"}},{"@type":"ListItem","position":2,"item":{"@id":"/blog2022-04-10-macos-10.15.7%E5%AE%89%E8%A3%85%E9%85%8D%E7%BD%AEgdb/"}}]},{"@context":"https://schema.org","@graph":[{"@type":"Article","@id":"/#/schema/article/1","headline":"macOS 10.15.7安装配置gdb","description":"macOS darwin内核的调整导致gdb无法正常工作，本文总结了权限问题、调试卡死问题的一种解决办法，亲测可用。但是该办法只是绕过了某些异常，并没有彻底修复gdb的bug","isPartOf":{"@id":"/blog/2022-04-10-macos-10.15.7%E5%AE%89%E8%A3%85%E9%85%8D%E7%BD%AEgdb/"},"mainEntityOfPage":{"@id":"/blog/2022-04-10-macos-10.15.7%E5%AE%89%E8%A3%85%E9%85%8D%E7%BD%AEgdb/"},"datePublished":"2022-04-10T13:05:20CET","dateModified":"2022-04-10T13:05:20CET","author":{"@id":"/#/schema/person/2"},"publisher":{"@id":"/#/schema/person/1"},"image":{"@id":"/blog/2022-04-10-macos-10.15.7%E5%AE%89%E8%A3%85%E9%85%8D%E7%BD%AEgdb/#/schema/image/2"}}]},{"@context":"https://schema.org","@graph":[{"@type":"Person","@id":"/#/schema/person/2","name":null,"sameAs":[]}]},{"@context":"https://schema.org","@graph":[{"@type":"ImageObject","@id":"/blog/2022-04-10-macos-10.15.7%E5%AE%89%E8%A3%85%E9%85%8D%E7%BD%AEgdb/#/schema/image/2","url":"/doks.png","contentUrl":"/doks.png","caption":"macOS 10.15.7安装配置gdb"}]}]}</script><meta name=theme-color content="#fff"><link rel=icon href=/favicon.ico sizes=any><link rel=icon type=image/svg+xml href=/favicon.svg><link rel=apple-touch-icon sizes=180x180 href=/apple-touch-icon.png><link rel=icon type=image/png sizes=32x32 href=/favicon-32x32.png><link rel=icon type=image/png sizes=16x16 href=/favicon-16x16.png><link rel=manifest crossorigin=use-credentials href=/site.webmanifest><script type=text/javascript src="https://platform-api.sharethis.com/js/sharethis.js#property=607868a58d7101001829a8df&product=sop" async></script><style>[alt~=sharing]{border:0;box-shadow:none}div#st-1{text-align:unset}div#st-1 .st-btn{height:24px;padding:0 4px}div#st-1 .st-btn>img{top:4.2px}div#st-2 .st-btn{height:24px;padding:0 4px}div#st-2 .st-btn>img{top:4.2px}</style></head><body class="blog single"><div class=sticky-top><div class=header-bar></div><header class="navbar navbar-expand-lg navbar-light doks-navbar"><nav class="container-xxl flex-wrap flex-lg-nowrap" aria-label="Main navigation"><a class="navbar-brand order-0" href=/ aria-label=MySpace>MySpace</a>
+<button class="btn btn-menu order-2 d-block d-lg-none" type=button data-bs-toggle=offcanvas data-bs-target=#offcanvasDoks aria-controls=offcanvasDoks aria-label="Open main menu"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentcolor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-menu"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button><div class="offcanvas offcanvas-end border-0 py-lg-1" tabindex=-1 id=offcanvasDoks data-bs-backdrop=true aria-labelledby=offcanvasDoksLabel><div class="header-bar d-lg-none"></div><div class="offcanvas-header d-lg-none"><h2 class="h5 offcanvas-title ps-2" id=offcanvasDoksLabel><a class=text-dark href=/>MySpace</a></h2><button type=button class="btn-close text-reset me-2" data-bs-dismiss=offcanvas aria-label="Close main menu"></button></div><div class="offcanvas-body p-4 p-lg-0"><ul class="nav flex-column flex-lg-row align-items-lg-center mt-2 mt-lg-0 ms-lg-2 me-lg-auto"><li class=nav-item><a class="nav-link ps-0 py-1 active" href=/blog/>Blog</a></li><li class=nav-item><a class="nav-link ps-0 py-1" href=/books/>Books</a></li><li class=nav-item><a class="nav-link ps-0 py-1" href=/journey/introduction>Journey</a></li></ul><hr class="text-black-50 my-4 d-lg-none"><form class="doks-search position-relative flex-grow-1 ms-lg-auto me-lg-2"><input id=search class="form-control is-search" type=search placeholder="Search docs..." aria-label="Search docs..." autocomplete=off><div id=suggestions class="shadow bg-white rounded d-none"></div></form><hr class="text-black-50 my-4 d-lg-none"><ul class="nav flex-column flex-lg-row"><li class=nav-item><a class="nav-link social-link" href=https://twitter.com/hitzhangjie><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentcolor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-twitter"><path d="M23 3a10.9 10.9.0 01-3.14 1.53 4.48 4.48.0 00-7.86 3v1A10.66 10.66.0 013 4s-4 9 5 13a11.64 11.64.0 01-7 2c9 5 20 0 20-11.5a4.5 4.5.0 00-.08-.83A7.72 7.72.0 0023 3z"/></svg><small class="ms-2 d-lg-none">Twitter</small></a></li><li class=nav-item><a class="nav-link social-link" href=https://github.com/hitzhangjie><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentcolor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-github"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37.0 00-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44.0 0020 4.77 5.07 5.07.0 0019.91 1S18.73.65 16 2.48a13.38 13.38.0 00-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07.0 005 4.77 5.44 5.44.0 003.5 8.55c0 5.42 3.3 6.61 6.44 7A3.37 3.37.0 009 18.13V22"/></svg><small class="ms-2 d-lg-none">GitHub</small></a></li></ul></div></div></nav></header></div><div class="wrap container-xxl" role=document><div class=content><div class="row flex-xl-nowrap"><div class="col-lg-5 col-xl-4 docs-sidebar"><nav class=docs-links aria-label="Main navigation"><h3>Tag List</h3><ol><li><a href=/tags/gdb/>gdb</a></li></ol></nav></div><nav class="docs-toc d-none d-xl-block col-xl-3" aria-label="Secondary navigation"><div class=page-links><h3>On this page</h3><nav id=TableOfContents><ul><li><ul><li><a href=#问题简介>问题简介</a></li><li><a href=#如何解决>如何解决</a></li><li><a href=#小节>小节</a></li><li><a href=#附录>附录</a></li></ul></li></ul></nav></div></nav><main class="docs-content col-lg-11 col-xl-9"><h1>macOS 10.15.7安装配置gdb</h1><div style=display:flex><div>分享:&nbsp;&nbsp;</div><div><div class=sharethis-inline-share-buttons></div></div></div><hr><p class=lead></p><h2 id=问题简介>问题简介 <a href=#%e9%97%ae%e9%a2%98%e7%ae%80%e4%bb%8b class=anchor aria-hidden=true>#</a><a href=#问题简介 class=anchor aria-hidden=true>#</a></h2><p>gdb作为一款符号级调试器，是广大开发人员排查问题的神兵利器，但是因为macOS darwin内核的一些调整，gdb出现了各种神奇的bug行为，如权限问题导致的无法启动调试、启动调试后调试会话卡死等等。</p><p>作者此前也曾经因为此类问题而苦恼，甚至不得不放弃了使用gdb调试器而使用其他办法来排查。最近在通过homebrew安装jupyterlab的时候发现gdb被升级了，就突然想起了之前被搁置的这个问题，测试后发现gdb还是不可正常使用。因此google一圈加不断测试，最终终于成功了。</p><p>这里总结下方便日后查阅，也供遇到类似问题的朋友参考，这确实是一个老大难的问题了。google能发现很多针对该问题的讨论，难兄难弟们，let&rsquo;s go。</p><h2 id=如何解决>如何解决 <a href=#%e5%a6%82%e4%bd%95%e8%a7%a3%e5%86%b3 class=anchor aria-hidden=true>#</a><a href=#如何解决 class=anchor aria-hidden=true>#</a></h2><ol><li><p>download the source code zip file from https://github.com/bminor/binutils-gdb.git,
+unzip the zipfile to <code>./binutils-gdb-master</code></p></li><li><p>then try to build from master HEAD</p><pre><code class=language-bash>mkdir build
+cd build
+../binutils-gdb-master/configure \
+    --disable-unit-tests         \
+    --disable-binutils           \
+    --without-guile
+make -j8
+</code></pre><p>the built gdb binary is put here: <code>./gdb/gdb</code>. Because I want to make package management simpler, so I don&rsquo;t want to run <code>make install</code> to install the gdb and other files.</p><blockquote><p>ps: there&rsquo;s no make uninstall target in the Makefile, if you want to remove all installed files, try this:</p></blockquote><pre><code>make install DESTDIR=/tmp/gccinst
+find /tmp/gccinst | sed -e s,/tmp/gccinst,, | \
+(while read F; do rm &quot;$F&quot;; done)
+</code></pre></li><li><p>I then run <code>brew install gdb</code> to install the homebrew latest version, then I replace the gdb binary by:</p><pre><code class=language-bash>cp ./gdb/gdb /usr/local/Cellar/gdb/11.2/bin/gdb -f
+</code></pre></li><li><p>Then codesign mentioned above, OK, I put it here for convenience:
+write a gdb-entitlement.xml:</p><pre><code class=language-bash>&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;
+&lt;!DOCTYPE plist PUBLIC &quot;-//Apple//DTD PLIST 1.0//EN&quot;
+&quot;http://www.apple.com/DTDs/PropertyList-1.0.dtd&quot;&gt;
+&lt;plist version=&quot;1.0&quot;&gt;
+&lt;dict&gt;
+    &lt;key&gt;com.apple.security.cs.allow-jit&lt;/key&gt;
+    &lt;true/&gt;
+    &lt;key&gt;com.apple.security.cs.allow-unsigned-executable-memory&lt;/key&gt;
+    &lt;true/&gt;
+    &lt;key&gt;com.apple.security.cs.allow-dyld-environment-variables&lt;/key&gt;
+    &lt;true/&gt;
+    &lt;key&gt;com.apple.security.cs.disable-library-validation&lt;/key&gt;
+    &lt;true/&gt;
+    &lt;key&gt;com.apple.security.cs.disable-executable-page-protection&lt;/key&gt;
+    &lt;true/&gt;
+    &lt;key&gt;com.apple.security.cs.debugger&lt;/key&gt;
+    &lt;true/&gt;
+    &lt;key&gt;com.apple.security.get-task-allow&lt;/key&gt;
+    &lt;true/&gt;
+&lt;/dict&gt;
+&lt;/plist&gt;
+</code></pre><p>then run following command to codesign:</p><pre><code>sudo codesign --entitlements gdb-entitlement.xml -fs gdb-cert $(which gdb)
+</code></pre><p>If you haven&rsquo;t created gdb-cert before, run following command to create:</p><pre><code class=language-bash># download the script, or create one with the content in Appendix
+https://github.com/conda-forge/gdb-feedstock/blob/main/recipe/macos-codesign/macos-setup-codesign.sh
+
+# replace the certificate name
+sed -i 's/gdb-codesign/gdb-cert/g' macos-setup-codesign.sh
+
+# run the script to create the certificate and trust it
+./macos-setup-codesign.sh
+
+# check the certificate is create or not
+security find-certificate -p -c gdb-cert | openssl x509 -checkend 0
+or
+security find-certificate -p -c gdb-cert |openssl x509 -noout -text\
+</code></pre></li><li><p>then you can start your debugging, it works.</p></li></ol><h2 id=小节>小节 <a href=#%e5%b0%8f%e8%8a%82 class=anchor aria-hidden=true>#</a><a href=#小节 class=anchor aria-hidden=true>#</a></h2><p>本文总结了解决macOS平台上gdb无法正常调试的问题，这个办法只是解决了我和部分开发人员遇到的问题，但是并没有从根本上修复问题，不排除在您的环境下依然存在问题，请自己尝试是否有效，不行就继续寻找其他解决方案。</p><h2 id=附录>附录 <a href=#%e9%99%84%e5%bd%95 class=anchor aria-hidden=true>#</a><a href=#附录 class=anchor aria-hidden=true>#</a></h2><ol><li><p>macos-setup-codesign.sh</p><pre><code class=language-bash>#!/bin/bash
+
+# This script is copied from https://github.com/llvm/llvm-project/blob/master/lldb/scripts/macos-setup-codesign.sh
+
+CERT=&quot;gdb_codesign&quot;
+
+function error() {
+    echo error: &quot;$@&quot; 1&gt;&amp;2
+    exit 1
+}
+
+function cleanup {
+    # Remove generated files
+    rm -f &quot;$TMPDIR/$CERT.tmpl&quot; &quot;$TMPDIR/$CERT.cer&quot; &quot;$TMPDIR/$CERT.key&quot; &gt; /dev/null 2&gt;&amp;1
+}
+
+trap cleanup EXIT
+
+# Check if the certificate is already present in the system keychain
+security find-certificate -Z -p -c &quot;$CERT&quot; /Library/Keychains/System.keychain &gt; /dev/null 2&gt;&amp;1
+if [ $? -eq 0 ]; then
+    echo Certificate has already been generated and installed
+    exit 0
+fi
+
+# Create the certificate template
+cat &lt;&lt;EOF &gt;$TMPDIR/$CERT.tmpl
+[ req ]
+default_bits       = 2048        # RSA key size
+encrypt_key        = no          # Protect private key
+default_md         = sha512      # MD to use
+prompt             = no          # Prompt for DN
+distinguished_name = codesign_dn # DN template
+[ codesign_dn ]
+commonName         = &quot;$CERT&quot;
+[ codesign_reqext ]
+keyUsage           = critical,digitalSignature
+extendedKeyUsage   = critical,codeSigning
+EOF
+
+echo Generating and installing gdb_codesign certificate
+
+# Generate a new certificate
+openssl req -new -newkey rsa:2048 -x509 -days 3650 -nodes -config &quot;$TMPDIR/$CERT.tmpl&quot; -extensions codesign_reqext -batch -out &quot;$TMPDIR/$CERT.cer&quot; -keyout &quot;$TMPDIR/$CERT.key&quot; &gt; /dev/null 2&gt;&amp;1
+[ $? -eq 0 ] || error Something went wrong when generating the certificate
+
+# Install the certificate in the system keychain
+sudo security add-trusted-cert -d -r trustRoot -p codeSign -k /Library/Keychains/System.keychain &quot;$TMPDIR/$CERT.cer&quot; &gt; /dev/null 2&gt;&amp;1
+[ $? -eq 0 ] || error Something went wrong when installing the certificate
+
+# Install the key for the certificate in the system keychain
+sudo security import &quot;$TMPDIR/$CERT.key&quot; -A -k /Library/Keychains/System.keychain &gt; /dev/null 2&gt;&amp;1
+[ $? -eq 0 ] || error Something went wrong when installing the key
+
+# Kill task_for_pid access control daemon
+sudo pkill -f /usr/libexec/taskgated &gt; /dev/null 2&gt;&amp;1
+
+# Exit indicating the certificate is now generated and installed
+exit 0
+</code></pre></li></ol><div class=edit-page><a href=https://github.com/hitzhangjie/myspace/blob/master/content/blog/2022-04-10-macOS%2010.15.7%e5%ae%89%e8%a3%85%e9%85%8d%e7%bd%aegdb.md><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentcolor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-edit-2"><path d="M17 3a2.828 2.828.0 114 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>Edit this page on GitHub</a></div><div class="docs-navigation d-flex justify-content-between"><a href=/blog/2022-04-24-understanding-design-patterns/><div class="card my-1"><div class="card-body py-2">&larr; Understanding the Design Patterns</div></div></a><a class=ms-auto href=/blog/2022-04-08-%E5%AE%9E%E7%8E%B0k8s%E5%BA%94%E7%94%A8%E8%BF%9C%E7%A8%8B%E8%B0%83%E8%AF%95/><div class="card my-1"><div class="card-body py-2">实现k8s应用远程调试 &rarr;</div></div></a></div></main></div></div></div><footer class="footer text-muted"><div class=container-xxl><div class=row><div class="col-lg-8 order-last order-lg-first"><ul class=list-inline><li class=list-inline-item>Powered by <a class=text-muted href=https://www.netlify.com/>Netlify</a>, <a class=text-muted href=https://gohugo.io/>Hugo</a>, and <a class=text-muted href=https://getdoks.org/>Doks</a></li></ul></div><div class="col-lg-8 order-first order-lg-last text-lg-end"><ul class=list-inline></ul></div><div class=col-lg-8 align=right><p><font size=-1>站点构建版本：v</font></p></div></div></div></footer><script src=/js/bootstrap.min.fdbe9b9ba88a036135318f3c721784d684ac9e3280fe282cc80d7d49f7f9c82780cd54228c1608685a230c09984300d7946fc471734d566fcebc148b65bd16db.js integrity="sha512-/b6bm6iKA2E1MY88cheE1oSsnjKA/igsyA19Sff5yCeAzVQijBYIaFojDAmYQwDXlG/EcXNNVm/OvBSLZb0W2w==" crossorigin=anonymous defer></script>
+<script src=/js/highlight.min.451fe6185924dcedf55c767559b5130f666f31c989f0078a75bafc346ad7364e180edfd731b1ca6bae0e90dfee88842885d284126ab0879f5067399e3a02b09e.js integrity="sha512-RR/mGFkk3O31XHZ1WbUTD2ZvMcmJ8AeKdbr8NGrXNk4YDt/XMbHKa64OkN/uiIQohdKEEmqwh59QZzmeOgKwng==" crossorigin=anonymous defer></script>
+<script src=/main.min.f16ffd9b364013a1df84be9cd7a45c470cb48639766bf5551e05bba845fe4ab150cb6436de43609bfed9af47c23bd5e395e9a10b932fa6fb2c4ee8f6cc78d7a3.js integrity="sha512-8W/9mzZAE6HfhL6c16RcRwy0hjl2a/VVHgW7qEX+SrFQy2Q23kNgm/7Zr0fCO9XjlemhC5MvpvssTuj2zHjXow==" crossorigin=anonymous defer></script>
+<script src=/index.min.4f5da6d5d5039814b7640914dc6d7af9b1826b54a2e8027123e345920f33e3dab6f98ed3b275444c8e3ce3de9faa12475d34fad04a0140d0a99b28e75bc5267c.js integrity="sha512-T12m1dUDmBS3ZAkU3G16+bGCa1Si6AJxI+NFkg8z49q2+Y7TsnVETI48496fqhJHXTT60EoBQNCpmyjnW8UmfA==" crossorigin=anonymous defer></script></body></html>

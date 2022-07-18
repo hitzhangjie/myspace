@@ -1,0 +1,108 @@
+<!doctype html><html lang=en-us><head><meta charset=utf-8><meta http-equiv=x-ua-compatible content="ie=edge"><meta name=viewport content="width=device-width,initial-scale=1,shrink-to-fit=no"><link rel=preload as=font href=/fonts/vendor/jost/jost-v4-latin-regular.woff2 type=font/woff2 crossorigin><link rel=preload as=font href=/fonts/vendor/jost/jost-v4-latin-500.woff2 type=font/woff2 crossorigin><link rel=preload as=font href=/fonts/vendor/jost/jost-v4-latin-700.woff2 type=font/woff2 crossorigin><link rel=stylesheet href=/main.63b6b8ff933309fcc94a30e21d69932290c8643fa1a32893f5681778c776ed3e51c237a1acd00b42426b3bf780c351b4a6ce75b3b659915ef0dd610b2e027a8c.css integrity="sha512-Y7a4/5MzCfzJSjDiHWmTIpDIZD+hoyiT9WgXeMd27T5RwjehrNALQkJrO/eAw1G0ps51s7ZZkV7w3WELLgJ6jA==" crossorigin=anonymous><noscript><style>img.lazyload{display:none}</style></noscript><meta name=robots content="index, follow"><meta name=googlebot content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1"><meta name=bingbot content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1"><title>为什么需要内存对齐，以及如何控制对齐 - MySpace</title><meta name=description content="介绍下内存对齐访问（aligned access）的重要性，以及不对齐访问的情况下不同处理器的不同的行为，以及如何规避这些问题，比如编译期层面可能有哪些措施。也描述了下如何通过GCC扩展来控制aligned boundary或者packed。"><link rel=canonical href=/blog/%E5%86%85%E5%AD%98%E5%AF%B9%E9%BD%90/><meta property="og:locale" content="en_US"><meta property="og:type" content="article"><meta property="og:title" content="为什么需要内存对齐，以及如何控制对齐"><meta property="og:description" content="介绍下内存对齐访问（aligned access）的重要性，以及不对齐访问的情况下不同处理器的不同的行为，以及如何规避这些问题，比如编译期层面可能有哪些措施。也描述了下如何通过GCC扩展来控制aligned boundary或者packed。"><meta property="og:url" content="/blog/%E5%86%85%E5%AD%98%E5%AF%B9%E9%BD%90/"><meta property="og:site_name" content="MySpace"><meta property="article:published_time" content="2022-06-26T23:57:00+08:00"><meta property="article:modified_time" content="2022-06-26T23:57:00+08:00"><meta property="og:image" content="/doks.png"><meta property="og:image:alt" content="MySpace"><meta name=twitter:card content="summary_large_image"><meta name=twitter:site content="@hitzhangjie"><meta name=twitter:creator content="@hitzhangjie"><meta name=twitter:title content="为什么需要内存对齐，以及如何控制对齐"><meta name=twitter:description content="介绍下内存对齐访问（aligned access）的重要性，以及不对齐访问的情况下不同处理器的不同的行为，以及如何规避这些问题，比如编译期层面可能有哪些措施。也描述了下如何通过GCC扩展来控制aligned boundary或者packed。"><meta name=twitter:image content="/doks.png"><meta name=twitter:image:alt content="为什么需要内存对齐，以及如何控制对齐"><script type=application/ld+json>{"@context":"https://schema.org","@graph":[{"@type":"Person","@id":"/#/schema/person/1","name":"","url":"/","sameAs":["https://twitter.com/hitzhangjie","https://www.linkedin.com/in/hitzhangjie/","https://github.com/hitzhangjie"],"image":{"@type":"ImageObject","@id":"/#/schema/image/1","url":"/\u003cnil\u003e","width":null,"height":null,"caption":""}},{"@type":"WebSite","@id":"/#/schema/website/1","url":"/","name":"MySpace","description":"MySpace is a hitzhangjie\u0027s personal space, for blogs, books, journey, thinkings.","publisher":{"@id":"/#/schema/person/1"}},{"@type":"WebPage","@id":"/blog/%E5%86%85%E5%AD%98%E5%AF%B9%E9%BD%90/","url":"/blog/%E5%86%85%E5%AD%98%E5%AF%B9%E9%BD%90/","name":"为什么需要内存对齐，以及如何控制对齐","description":"介绍下内存对齐访问（aligned access）的重要性，以及不对齐访问的情况下不同处理器的不同的行为，以及如何规避这些问题，比如编译期层面可能有哪些措施。也描述了下如何通过GCC扩展来控制aligned boundary或者packed。","isPartOf":{"@id":"/#/schema/website/1"},"about":{"@id":"/#/schema/person/1"},"datePublished":"2022-06-26T23:57:00CET","dateModified":"2022-06-26T23:57:00CET","breadcrumb":{"@id":"/blog/%E5%86%85%E5%AD%98%E5%AF%B9%E9%BD%90/#/schema/breadcrumb/1"},"primaryImageOfPage":{"@id":"/blog/%E5%86%85%E5%AD%98%E5%AF%B9%E9%BD%90/#/schema/image/2"},"inLanguage":"","potentialAction":[{"@type":"ReadAction","target":["/blog/%E5%86%85%E5%AD%98%E5%AF%B9%E9%BD%90/"]}]},{"@type":"BreadcrumbList","@id":"/blog/%E5%86%85%E5%AD%98%E5%AF%B9%E9%BD%90/#/schema/breadcrumb/1","name":"Breadcrumbs","itemListElement":[{"@type":"ListItem","position":1,"item":{"@type":"WebPage","@id":"/","url":"/","name":"Home"}},{"@type":"ListItem","position":2,"item":{"@id":"/blog%E5%86%85%E5%AD%98%E5%AF%B9%E9%BD%90/"}}]},{"@context":"https://schema.org","@graph":[{"@type":"Article","@id":"/#/schema/article/1","headline":"为什么需要内存对齐，以及如何控制对齐","description":"介绍下内存对齐访问（aligned access）的重要性，以及不对齐访问的情况下不同处理器的不同的行为，以及如何规避这些问题，比如编译期层面可能有哪些措施。也描述了下如何通过GCC扩展来控制aligned boundary或者packed。","isPartOf":{"@id":"/blog/%E5%86%85%E5%AD%98%E5%AF%B9%E9%BD%90/"},"mainEntityOfPage":{"@id":"/blog/%E5%86%85%E5%AD%98%E5%AF%B9%E9%BD%90/"},"datePublished":"2022-06-26T23:57:00CET","dateModified":"2022-06-26T23:57:00CET","author":{"@id":"/#/schema/person/2"},"publisher":{"@id":"/#/schema/person/1"},"image":{"@id":"/blog/%E5%86%85%E5%AD%98%E5%AF%B9%E9%BD%90/#/schema/image/2"}}]},{"@context":"https://schema.org","@graph":[{"@type":"Person","@id":"/#/schema/person/2","name":null,"sameAs":[]}]},{"@context":"https://schema.org","@graph":[{"@type":"ImageObject","@id":"/blog/%E5%86%85%E5%AD%98%E5%AF%B9%E9%BD%90/#/schema/image/2","url":"/doks.png","contentUrl":"/doks.png","caption":"为什么需要内存对齐，以及如何控制对齐"}]}]}</script><meta name=theme-color content="#fff"><link rel=icon href=/favicon.ico sizes=any><link rel=icon type=image/svg+xml href=/favicon.svg><link rel=apple-touch-icon sizes=180x180 href=/apple-touch-icon.png><link rel=icon type=image/png sizes=32x32 href=/favicon-32x32.png><link rel=icon type=image/png sizes=16x16 href=/favicon-16x16.png><link rel=manifest crossorigin=use-credentials href=/site.webmanifest><script type=text/javascript src="https://platform-api.sharethis.com/js/sharethis.js#property=607868a58d7101001829a8df&product=sop" async></script><style>[alt~=sharing]{border:0;box-shadow:none}div#st-1{text-align:unset}div#st-1 .st-btn{height:24px;padding:0 4px}div#st-1 .st-btn>img{top:4.2px}div#st-2 .st-btn{height:24px;padding:0 4px}div#st-2 .st-btn>img{top:4.2px}</style></head><body class="blog single"><div class=sticky-top><div class=header-bar></div><header class="navbar navbar-expand-lg navbar-light doks-navbar"><nav class="container-xxl flex-wrap flex-lg-nowrap" aria-label="Main navigation"><a class="navbar-brand order-0" href=/ aria-label=MySpace>MySpace</a>
+<button class="btn btn-menu order-2 d-block d-lg-none" type=button data-bs-toggle=offcanvas data-bs-target=#offcanvasDoks aria-controls=offcanvasDoks aria-label="Open main menu"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentcolor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-menu"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button><div class="offcanvas offcanvas-end border-0 py-lg-1" tabindex=-1 id=offcanvasDoks data-bs-backdrop=true aria-labelledby=offcanvasDoksLabel><div class="header-bar d-lg-none"></div><div class="offcanvas-header d-lg-none"><h2 class="h5 offcanvas-title ps-2" id=offcanvasDoksLabel><a class=text-dark href=/>MySpace</a></h2><button type=button class="btn-close text-reset me-2" data-bs-dismiss=offcanvas aria-label="Close main menu"></button></div><div class="offcanvas-body p-4 p-lg-0"><ul class="nav flex-column flex-lg-row align-items-lg-center mt-2 mt-lg-0 ms-lg-2 me-lg-auto"><li class=nav-item><a class="nav-link ps-0 py-1 active" href=/blog/>Blog</a></li><li class=nav-item><a class="nav-link ps-0 py-1" href=/books/>Books</a></li><li class=nav-item><a class="nav-link ps-0 py-1" href=/journey/introduction>Journey</a></li></ul><hr class="text-black-50 my-4 d-lg-none"><form class="doks-search position-relative flex-grow-1 ms-lg-auto me-lg-2"><input id=search class="form-control is-search" type=search placeholder="Search docs..." aria-label="Search docs..." autocomplete=off><div id=suggestions class="shadow bg-white rounded d-none"></div></form><hr class="text-black-50 my-4 d-lg-none"><ul class="nav flex-column flex-lg-row"><li class=nav-item><a class="nav-link social-link" href=https://twitter.com/hitzhangjie><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentcolor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-twitter"><path d="M23 3a10.9 10.9.0 01-3.14 1.53 4.48 4.48.0 00-7.86 3v1A10.66 10.66.0 013 4s-4 9 5 13a11.64 11.64.0 01-7 2c9 5 20 0 20-11.5a4.5 4.5.0 00-.08-.83A7.72 7.72.0 0023 3z"/></svg><small class="ms-2 d-lg-none">Twitter</small></a></li><li class=nav-item><a class="nav-link social-link" href=https://github.com/hitzhangjie><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentcolor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-github"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37.0 00-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44.0 0020 4.77 5.07 5.07.0 0019.91 1S18.73.65 16 2.48a13.38 13.38.0 00-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07.0 005 4.77 5.44 5.44.0 003.5 8.55c0 5.42 3.3 6.61 6.44 7A3.37 3.37.0 009 18.13V22"/></svg><small class="ms-2 d-lg-none">GitHub</small></a></li></ul></div></div></nav></header></div><div class="wrap container-xxl" role=document><div class=content><div class="row flex-xl-nowrap"><div class="col-lg-5 col-xl-4 docs-sidebar"><nav class=docs-links aria-label="Main navigation"><h3>Tag List</h3><ol><li><a href=/tags/%e5%86%85%e5%ad%98%e5%af%b9%e9%bd%90/>内存对齐</a></li><li><a href=/tags/alignment/>alignment</a></li><li><a href=/tags/padding/>padding</a></li><li><a href=/tags/packed/>packed</a></li></ol></nav></div><nav class="docs-toc d-none d-xl-block col-xl-3" aria-label="Secondary navigation"><div class=page-links><h3>On this page</h3><nav id=TableOfContents><ul><li><ul><li><a href=#什么是内存对齐>什么是内存对齐？</a></li><li><a href=#为什么需要对齐>为什么需要对齐？</a></li><li><a href=#内存对齐基本规则>内存对齐基本规则？</a></li><li><a href=#如何人为控制对齐>如何人为控制对齐？</a></li><li><a href=#总结>总结</a></li></ul></li></ul></nav></div></nav><main class="docs-content col-lg-11 col-xl-9"><h1>为什么需要内存对齐，以及如何控制对齐</h1><div style=display:flex><div>分享:&nbsp;&nbsp;</div><div><div class=sharethis-inline-share-buttons></div></div></div><hr><p class=lead></p><h2 id=什么是内存对齐>什么是内存对齐？ <a href=#%e4%bb%80%e4%b9%88%e6%98%af%e5%86%85%e5%ad%98%e5%af%b9%e9%bd%90 class=anchor aria-hidden=true>#</a><a href=#什么是内存对齐 class=anchor aria-hidden=true>#</a></h2><p>所谓的内存对齐，指的是我们的一些数据在内存中组织的时候，为了后续访问时效率更高，需要将其起始地址进行一定的对齐处理，最常见的就是将结构体各个成员起始地址分别对齐，非结构体比如一个普通的int数也会对齐处理的。</p><p>举个int数的例子：</p><pre><code class=language-c>int n = 100;
+printf(&quot;n: %d\n&quot;, n);
+printf(&quot;sizeof(int): %lu, address: %p\n&quot;, sizeof(n), &amp;n);
+</code></pre><p>运行后发现n的大小是4字节，地址是0x16d216c4c，hex &lsquo;c&rsquo;对应二进制数为1100，低位是00，00表示是4字节对齐的，那这个int数在内存中组织就是4字节对齐的。</p><p>再看个struct结构体：</p><pre><code class=language-c>typedef struct {
+    char sex;
+    int age;
+} Person;
+
+Person p;
+printf(&quot;sizeof(person): %lu\n&quot;, sizeof(p));
+printf(&quot;person.sex address: %p\n&quot;, &amp;p.sex);
+printf(&quot;person.age address: %p\n&quot;, &amp;p.age);
+</code></pre><p>运行后发现p的大小是8个字节，我们书本上学习过，sex放在地址0，age放在地址4处，sex后有3个padding char，这样整个是8个字节。然后我们继续看下地址:</p><pre><code class=language-bash>person address: 0x16fdbac44
+person.sex address: 0x16fdbac44
+person.age address: 0x16fdbac48
+</code></pre><p>struct的首地址跟第一个成员的首地址是相同的，低位的44表示01000100，说明这个结构体本身以及内部成员sex都是4字节对齐的，然后age地址低位是01001000，在0x16fdbac44+4=0x16fdbac48，其实是4字节对齐的。这么看下来这个结构体中各个字段都是4字节对齐的。在sex和age之间padding了3个char。</p><p>这就是内存对齐了，至少直观地知道是什么了。</p><blockquote><p>简单地说，当我们希望读取的数据字节数是N，该数据起始地址是addr，假设 <code>addr % N == 0</code> 就是aligned access，反之就是unaligned access。</p><p>即便是基本类型也会对齐，对于结构体各个field都会对齐，当我们说一个struct是多少字节对齐时，指的是struct中field对齐用的字节数最大的一个。
+不妨了解下go语言中的内存对齐规则，see: https://go.dev/ref/spec#:~:text=The%20following%20minimal,array%27s%20element%20type.</p></blockquote><h2 id=为什么需要对齐>为什么需要对齐？ <a href=#%e4%b8%ba%e4%bb%80%e4%b9%88%e9%9c%80%e8%a6%81%e5%af%b9%e9%bd%90 class=anchor aria-hidden=true>#</a><a href=#为什么需要对齐 class=anchor aria-hidden=true>#</a></h2><p>那么为什么要填充些padding数据呢？这就涉及到处理器访存的工作过程了，我们怎么控制处理器访问内存数据的？一般就是通过mov指令来将内存数据搬迁到内存后者寄存器中。mov指令，指令译码、指令执行，其实就是把一个内存地址放到地址总线上通过内存总线控制对应地址可读，然后通过数据总线从指定起始地址处连续读取数据总线位宽的数据到MDR（存储器数据寄存器）然后进一步加载到指定寄存器或者内存中。</p><p>这里有什么要关注的吗？有，比如8086 20位的地址线可以寻址1MB的内存，内存以字节编址，那么20位地址线可以寻址内存空间为2^20=1MB，一次读取的数据量取决于数据总线位宽，比如8086位 16位数据线，一次也就读取2个字节。</p><p>假设我们一个int数吧存放在地址0处，那么我1条汇编指令mov ax, 0x0就可以完成，为啥呢，数据总线是16位的，一次就能读取出来放到ax里。</p><p>那么如果这个int数不在地址0处，而是在0x1处呢？此时一条mov ax, 0x0就不够了，只读了8个字节，还有8个字节在0x2处，最后就只能movb al, 0x1, movb ah, 0x2。和内存对齐的相比，这种就多了一次访存操作，执行效率自然就慢了啊。</p><p>上面这个例子基本总结了内存对齐的原因，就是为了尽量通过内存对齐充分发挥硬件访问内存的效率，避免因为未合理对齐导致的编译器需要安插一些其他更多的内存访问指令，每条指令执行都需要经过取指、译码、执行等过程，而且还是访存，访存和处理器计算的效率是不在一个数量级的。所以要内存对齐。</p><blockquote><p>准确地说，unaligned access的坏处主要包含这些，跟平台有关系：</p><ul><li>有的平台会透明处理这些问题，只不过是性能上会有些下降；</li><li>有的平台可能会抛异常，异常处理函数来解决，性能开销更大；</li><li>有的平台可能会抛异常，异常信息不明确，无法修复；</li><li>有的平台可能不能正常处理，请求了错误的内存地址的数据，导致bug；</li></ul><p>一般编译器会考虑不同平台的差异性，尽量生成aligned access的指令。</p><p>see：<a href=https://sourcegraph.com/github.com/torvalds/linux/-/blob/Documentation/core-api/unaligned-memory-access.rst>linux unaligned memory access</a>。</p></blockquote><h2 id=内存对齐基本规则>内存对齐基本规则？ <a href=#%e5%86%85%e5%ad%98%e5%af%b9%e9%bd%90%e5%9f%ba%e6%9c%ac%e8%a7%84%e5%88%99 class=anchor aria-hidden=true>#</a><a href=#内存对齐基本规则 class=anchor aria-hidden=true>#</a></h2><p>内存对齐规则，大面上的大家都清楚，就是算呗，按那几条对齐规则来。</p><p>举个例子：</p><pre><code class=language-c>typedef struct {
+	char sex;
+  int age;
+} Student;
+</code></pre><p>sex占1个字节，放在地址p处1字节对齐；age是4个字节的话应该4字节对齐，这样sex后应该填充3个padding char，age放在地址p+0x4处，本身为4字节。这样整个struct大小为8字节，各字段也合理对齐了。</p><p>读者可以自行找些网上的相关资料了解更多对齐的信息。</p><h2 id=如何人为控制对齐>如何人为控制对齐？ <a href=#%e5%a6%82%e4%bd%95%e4%ba%ba%e4%b8%ba%e6%8e%a7%e5%88%b6%e5%af%b9%e9%bd%90 class=anchor aria-hidden=true>#</a><a href=#如何人为控制对齐 class=anchor aria-hidden=true>#</a></h2><p>对于编译期默认是如何控制对齐的，我们可以写程序轻松验证出来。其实gcc编译期扩展可以通过attribute进行修饰，对结构体对齐、结构体字段的对齐规则进行精细控制。</p><p>这部分我们就通过程序来验证学习下，不做过多解释了，注释可以说明一切。</p><pre><code class=language-c>#include &lt;stdio.h&gt;
+
+typedef struct {
+    char sex;
+    int age;
+} Person;
+
+// because it's packed, so sizeof is 5 bytes
+// 1 + 4 = 5 bytes
+typedef struct __attribute__ ((packed))
+{
+    char sex;
+    int age;
+} Student;
+
+// this way: 1 + 4 + 3padding + 4 = 12 bytes
+struct StudentX {
+    char sex __attribute__ ((aligned (1)));
+    int age __attribute__ ((packed));
+    int xxx __attribute__ ((aligned(4)));
+};
+
+// this way, the sizeof StudentY will be 16 bytes
+// 8 + 8 = 16 bytes
+struct StudentY {
+    char sex __attribute__ ((aligned (8)));
+    int age __attribute__ ((aligned (8)));
+};
+
+// this way, add attributes to the struct means this struct:
+// - aligned(4) : sizeof is 8
+// - aligned(8) : sizeof is 8
+// - aligned(16) : sizeof is 16
+// - aligned(32) : sizeof is 32
+//
+// i don't know how aligned affects struct members, it looks like
+// telling the compiler to try to align the struct members in this way:
+// - if aligned (n) is too small, use default value, like char:1 int:4
+// - if aligned (n) is bigger than default values, try to align to bigger boundary.
+typedef struct __attribute__ ((aligned (4))) 
+{
+    char sex ;
+    int age ;
+} StudentZ;
+
+int main(int argc, char **argv)
+{
+    int n = 100;
+    printf(&quot;n: %d\n&quot;, n);
+    printf(&quot;sizeof(int): %lu, address: %p\n&quot;, sizeof(n), &amp;n);
+
+    Person p;
+    printf(&quot;sizeof(person): %lu\n&quot;, sizeof(p));
+    printf(&quot;person address: %p\n&quot;, &amp;p);
+    printf(&quot;person.sex address: %p\n&quot;, &amp;p.sex);
+    printf(&quot;person.age address: %p\n&quot;, &amp;p.age);
+
+    Student s;
+    printf(&quot;sizeof(student): %lu\n&quot;, sizeof(s));
+    struct StudentX x;
+    printf(&quot;sizeof(studentx): %lu\n&quot;, sizeof(x));
+
+    struct StudentY y;
+    printf(&quot;sizeof(studenty): %lu\n&quot;, sizeof(y));
+
+    StudentZ z;
+    printf(&quot;sizeof(studentz): %lu\n&quot;, sizeof(z));
+    printf(&quot;address of z: %p\n&quot;, &amp;z);
+
+    return 0;
+}
+</code></pre><p>运行程序进行测试：</p><pre><code class=language-bash>n: 100
+sizeof(int): 4, address: 0x16b356c4c
+sizeof(person): 8
+person address: 0x16b356c44
+person.sex address: 0x16b356c44
+person.age address: 0x16b356c48
+sizeof(student): 5
+sizeof(studentx): 12
+sizeof(studenty): 16
+sizeof(studentz): 8
+address of z: 0x16b356c18
+
+</code></pre><p>通过这里的测试程序，以及输出的结果，我们应该能推断出编译期扩展 <code>__attribute__ ((aligned (n))) </code>与<code> __attribute__((packed))</code>的差异。packed表示不再对其进行padding，aligned表示了按照多少字节控制对齐，如果不超过指定的n就不能完成对对齐，就用默认可行的值，如果n超过了最小阈值则安n进行。</p><h2 id=总结>总结 <a href=#%e6%80%bb%e7%bb%93 class=anchor aria-hidden=true>#</a><a href=#总结 class=anchor aria-hidden=true>#</a></h2><p>本文小结了数据、结构体及其字段在内存中的对齐，并通过实例解释了gcc扩展对对齐的控制。之前天美J3面试时有问及计算sizeof时又没有例外情况，当时也没想起来。除了平台原因（比如int数大小不是4字节），再或者如果是采用的gcc attributes对其进行了扩展，比如padding或者比较大的aligned value也会导致计算结果不一样的问题。</p><div class=edit-page><a href=https://github.com/hitzhangjie/myspace/blob/master/content/blog/kernel/%e5%86%85%e5%ad%98%e5%af%b9%e9%bd%90.md><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentcolor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-edit-2"><path d="M17 3a2.828 2.828.0 114 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>Edit this page on GitHub</a></div><div class="docs-navigation d-flex justify-content-between"><a href=/blog/%E5%B9%B6%E5%8F%91%E5%90%8C%E6%AD%A5/><div class="card my-1"><div class="card-body py-2">&larr; 并发同步</div></div></a><a class=ms-auto href=/blog/volatile/><div class="card my-1"><div class="card-body py-2">对volatile的认识 &rarr;</div></div></a></div></main></div></div></div><footer class="footer text-muted"><div class=container-xxl><div class=row><div class="col-lg-8 order-last order-lg-first"><ul class=list-inline><li class=list-inline-item>Powered by <a class=text-muted href=https://www.netlify.com/>Netlify</a>, <a class=text-muted href=https://gohugo.io/>Hugo</a>, and <a class=text-muted href=https://getdoks.org/>Doks</a></li></ul></div><div class="col-lg-8 order-first order-lg-last text-lg-end"><ul class=list-inline></ul></div><div class=col-lg-8 align=right><p><font size=-1>站点构建版本：v</font></p></div></div></div></footer><script src=/js/bootstrap.min.fdbe9b9ba88a036135318f3c721784d684ac9e3280fe282cc80d7d49f7f9c82780cd54228c1608685a230c09984300d7946fc471734d566fcebc148b65bd16db.js integrity="sha512-/b6bm6iKA2E1MY88cheE1oSsnjKA/igsyA19Sff5yCeAzVQijBYIaFojDAmYQwDXlG/EcXNNVm/OvBSLZb0W2w==" crossorigin=anonymous defer></script>
+<script src=/js/highlight.min.451fe6185924dcedf55c767559b5130f666f31c989f0078a75bafc346ad7364e180edfd731b1ca6bae0e90dfee88842885d284126ab0879f5067399e3a02b09e.js integrity="sha512-RR/mGFkk3O31XHZ1WbUTD2ZvMcmJ8AeKdbr8NGrXNk4YDt/XMbHKa64OkN/uiIQohdKEEmqwh59QZzmeOgKwng==" crossorigin=anonymous defer></script>
+<script src=/main.min.f16ffd9b364013a1df84be9cd7a45c470cb48639766bf5551e05bba845fe4ab150cb6436de43609bfed9af47c23bd5e395e9a10b932fa6fb2c4ee8f6cc78d7a3.js integrity="sha512-8W/9mzZAE6HfhL6c16RcRwy0hjl2a/VVHgW7qEX+SrFQy2Q23kNgm/7Zr0fCO9XjlemhC5MvpvssTuj2zHjXow==" crossorigin=anonymous defer></script>
+<script src=/index.min.4f5da6d5d5039814b7640914dc6d7af9b1826b54a2e8027123e345920f33e3dab6f98ed3b275444c8e3ce3de9faa12475d34fad04a0140d0a99b28e75bc5267c.js integrity="sha512-T12m1dUDmBS3ZAkU3G16+bGCa1Si6AJxI+NFkg8z49q2+Y7TsnVETI48496fqhJHXTT60EoBQNCpmyjnW8UmfA==" crossorigin=anonymous defer></script></body></html>

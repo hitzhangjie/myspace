@@ -1,0 +1,330 @@
+<!doctype html><html lang=en-us><head><meta charset=utf-8><meta http-equiv=x-ua-compatible content="ie=edge"><meta name=viewport content="width=device-width,initial-scale=1,shrink-to-fit=no"><link rel=preload as=font href=/fonts/vendor/jost/jost-v4-latin-regular.woff2 type=font/woff2 crossorigin><link rel=preload as=font href=/fonts/vendor/jost/jost-v4-latin-500.woff2 type=font/woff2 crossorigin><link rel=preload as=font href=/fonts/vendor/jost/jost-v4-latin-700.woff2 type=font/woff2 crossorigin><link rel=stylesheet href=/main.63b6b8ff933309fcc94a30e21d69932290c8643fa1a32893f5681778c776ed3e51c237a1acd00b42426b3bf780c351b4a6ce75b3b659915ef0dd610b2e027a8c.css integrity="sha512-Y7a4/5MzCfzJSjDiHWmTIpDIZD+hoyiT9WgXeMd27T5RwjehrNALQkJrO/eAw1G0ps51s7ZZkV7w3WELLgJ6jA==" crossorigin=anonymous><noscript><style>img.lazyload{display:none}</style></noscript><meta name=robots content="index, follow"><meta name=googlebot content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1"><meta name=bingbot content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1"><title>Go程序内存泄露问题快速定位 - MySpace</title><meta name=description content=".myimg { width: 680px; padding-bottom: 1rem; }  前几天有同学反馈了cgo内存泄露问题，自己也针对这个问题探索了一番，算是为以后解决类似问题提前攒点经验吧。也趁机整理了一下go开发过程中内存泄露问题的一些常用排查方法，也希望对新接触go的同学有所帮助。整理之余，bcc工具之丰富也让我有点惊讶，也希望对自己日后的工作有所帮助吧。
+内存泄漏 # 内存泄露，一个老生常谈的问题，但即便是老手也会犯一些低级错误。如果没有可靠的研发流程保证在测试阶段发现问题，问题就容易被带到线上。计算资源始终是有限的，问题也不会因为资源充裕就消失不见，产生影响只是时间问题。影响有多大，就要结合场景来说了。
+内存泄漏，最可能的影响就是内存申请失败。但实际上操作系统更聪明，结合系统整体负载情况，它会为每个进程计算一个oom_score，并在内存资源紧张时选择一个合适的进程杀死并回收内存资源，see how does the oom killer decide which process to kill first。
+所以，内存泄露的最终结果，大概率会被操作系统kill，通常进程挂掉后，确认其是否是因为oom问题被kill，可以通过查看 /proc/messages 来确认是否有对应日志。有的话，那就坐实了oom killed（但是被oom killed的进程不一定意味着存在内存泄露）。
+服务质量 # 结合运维手段的变化，来看看是否内存泄漏问题对服务质量造成的影响。
+ 传统人工方式，通过感知告警、人为介入这种方式，效率低，要十几分钟； 通过虚拟机自动化部署的方式，感知异常自动重启虚拟机，耗时大约要分钟级； 通过docker容器化部署的方式，感知异常自动重启容器，耗时大约在秒级；  看上去现代运维方式一定程度上可以缓解这个问题，是，这也要分情况：
+ 如果内存泄露的代码路径不容易被触发，那可能要跑很久才能触发oom kill，如一周；但是如果代码路径在关键代码路径上，且请求量大，频繁触发内存泄露，那可能跑个几分钟就会挂掉； 跟每次内存泄露的内存大小也有关系，如果泄露的少，多苟活一阵子，反之容易暴毙； 进程一旦挂掉，这段时间就不能响应了，服务的健康监测、名字服务、负载均衡等措施需要一段时间才能感知到，如果请求量大，服务不可用依然会带来比较大的影响。  服务质量保证是不变的，所以别管用了什么运维手段，问题终究是问题，也是要解决的。
+Go内存泄漏 # 垃圾回收 # 自动内存管理减轻了开发人员管理内存的复杂性，不需要像C\C++开发者那样显示malloc、free，或者new、delete。垃圾回收借助于一些垃圾回收算法完成对无用内存的清理，垃圾回收算法有很多，比如：引用计数、标记清除、拷贝、分代等等。
+Go中垃圾回收器采用的是“并发三色标记清除”算法，see:
+ Garbage Collection In Go : Part I - Semantics Garbage Collection In Go : Part II - GC Traces Garbage Collection In Go : Part III - GC Pacing  Go语言支持自动内存管理，那还存在内存泄漏问题吗？"><link rel=canonical href=/blog/2021-04-14-go%E7%A8%8B%E5%BA%8F%E5%86%85%E5%AD%98%E6%B3%84%E9%9C%B2%E9%97%AE%E9%A2%98%E5%BF%AB%E9%80%9F%E5%AE%9A%E4%BD%8D/><meta property="og:locale" content="en_US"><meta property="og:type" content="article"><meta property="og:title" content="Go程序内存泄露问题快速定位"><meta property="og:description" content=".myimg { width: 680px; padding-bottom: 1rem; }  前几天有同学反馈了cgo内存泄露问题，自己也针对这个问题探索了一番，算是为以后解决类似问题提前攒点经验吧。也趁机整理了一下go开发过程中内存泄露问题的一些常用排查方法，也希望对新接触go的同学有所帮助。整理之余，bcc工具之丰富也让我有点惊讶，也希望对自己日后的工作有所帮助吧。
+内存泄漏 # 内存泄露，一个老生常谈的问题，但即便是老手也会犯一些低级错误。如果没有可靠的研发流程保证在测试阶段发现问题，问题就容易被带到线上。计算资源始终是有限的，问题也不会因为资源充裕就消失不见，产生影响只是时间问题。影响有多大，就要结合场景来说了。
+内存泄漏，最可能的影响就是内存申请失败。但实际上操作系统更聪明，结合系统整体负载情况，它会为每个进程计算一个oom_score，并在内存资源紧张时选择一个合适的进程杀死并回收内存资源，see how does the oom killer decide which process to kill first。
+所以，内存泄露的最终结果，大概率会被操作系统kill，通常进程挂掉后，确认其是否是因为oom问题被kill，可以通过查看 /proc/messages 来确认是否有对应日志。有的话，那就坐实了oom killed（但是被oom killed的进程不一定意味着存在内存泄露）。
+服务质量 # 结合运维手段的变化，来看看是否内存泄漏问题对服务质量造成的影响。
+ 传统人工方式，通过感知告警、人为介入这种方式，效率低，要十几分钟； 通过虚拟机自动化部署的方式，感知异常自动重启虚拟机，耗时大约要分钟级； 通过docker容器化部署的方式，感知异常自动重启容器，耗时大约在秒级；  看上去现代运维方式一定程度上可以缓解这个问题，是，这也要分情况：
+ 如果内存泄露的代码路径不容易被触发，那可能要跑很久才能触发oom kill，如一周；但是如果代码路径在关键代码路径上，且请求量大，频繁触发内存泄露，那可能跑个几分钟就会挂掉； 跟每次内存泄露的内存大小也有关系，如果泄露的少，多苟活一阵子，反之容易暴毙； 进程一旦挂掉，这段时间就不能响应了，服务的健康监测、名字服务、负载均衡等措施需要一段时间才能感知到，如果请求量大，服务不可用依然会带来比较大的影响。  服务质量保证是不变的，所以别管用了什么运维手段，问题终究是问题，也是要解决的。
+Go内存泄漏 # 垃圾回收 # 自动内存管理减轻了开发人员管理内存的复杂性，不需要像C\C++开发者那样显示malloc、free，或者new、delete。垃圾回收借助于一些垃圾回收算法完成对无用内存的清理，垃圾回收算法有很多，比如：引用计数、标记清除、拷贝、分代等等。
+Go中垃圾回收器采用的是“并发三色标记清除”算法，see:
+ Garbage Collection In Go : Part I - Semantics Garbage Collection In Go : Part II - GC Traces Garbage Collection In Go : Part III - GC Pacing  Go语言支持自动内存管理，那还存在内存泄漏问题吗？"><meta property="og:url" content="/blog/2021-04-14-go%E7%A8%8B%E5%BA%8F%E5%86%85%E5%AD%98%E6%B3%84%E9%9C%B2%E9%97%AE%E9%A2%98%E5%BF%AB%E9%80%9F%E5%AE%9A%E4%BD%8D/"><meta property="og:site_name" content="MySpace"><meta property="article:published_time" content="2021-04-14T18:00:00+08:00"><meta property="article:modified_time" content="2021-04-14T18:00:00+08:00"><meta property="og:image" content="/doks.png"><meta property="og:image:alt" content="MySpace"><meta name=twitter:card content="summary_large_image"><meta name=twitter:site content="@hitzhangjie"><meta name=twitter:creator content="@hitzhangjie"><meta name=twitter:title content="Go程序内存泄露问题快速定位"><meta name=twitter:description content><meta name=twitter:image content="/doks.png"><meta name=twitter:image:alt content="Go程序内存泄露问题快速定位"><script type=application/ld+json>{"@context":"https://schema.org","@graph":[{"@type":"Person","@id":"/#/schema/person/1","name":"","url":"/","sameAs":["https://twitter.com/hitzhangjie","https://www.linkedin.com/in/hitzhangjie/","https://github.com/hitzhangjie"],"image":{"@type":"ImageObject","@id":"/#/schema/image/1","url":"/\u003cnil\u003e","width":null,"height":null,"caption":""}},{"@type":"WebSite","@id":"/#/schema/website/1","url":"/","name":"MySpace","description":"MySpace is a hitzhangjie\u0027s personal space, for blogs, books, journey, thinkings.","publisher":{"@id":"/#/schema/person/1"}},{"@type":"WebPage","@id":"/blog/2021-04-14-go%E7%A8%8B%E5%BA%8F%E5%86%85%E5%AD%98%E6%B3%84%E9%9C%B2%E9%97%AE%E9%A2%98%E5%BF%AB%E9%80%9F%E5%AE%9A%E4%BD%8D/","url":"/blog/2021-04-14-go%E7%A8%8B%E5%BA%8F%E5%86%85%E5%AD%98%E6%B3%84%E9%9C%B2%E9%97%AE%E9%A2%98%E5%BF%AB%E9%80%9F%E5%AE%9A%E4%BD%8D/","name":"Go程序内存泄露问题快速定位","description":"","isPartOf":{"@id":"/#/schema/website/1"},"about":{"@id":"/#/schema/person/1"},"datePublished":"2021-04-14T18:00:00CET","dateModified":"2021-04-14T18:00:00CET","breadcrumb":{"@id":"/blog/2021-04-14-go%E7%A8%8B%E5%BA%8F%E5%86%85%E5%AD%98%E6%B3%84%E9%9C%B2%E9%97%AE%E9%A2%98%E5%BF%AB%E9%80%9F%E5%AE%9A%E4%BD%8D/#/schema/breadcrumb/1"},"primaryImageOfPage":{"@id":"/blog/2021-04-14-go%E7%A8%8B%E5%BA%8F%E5%86%85%E5%AD%98%E6%B3%84%E9%9C%B2%E9%97%AE%E9%A2%98%E5%BF%AB%E9%80%9F%E5%AE%9A%E4%BD%8D/#/schema/image/2"},"inLanguage":"","potentialAction":[{"@type":"ReadAction","target":["/blog/2021-04-14-go%E7%A8%8B%E5%BA%8F%E5%86%85%E5%AD%98%E6%B3%84%E9%9C%B2%E9%97%AE%E9%A2%98%E5%BF%AB%E9%80%9F%E5%AE%9A%E4%BD%8D/"]}]},{"@type":"BreadcrumbList","@id":"/blog/2021-04-14-go%E7%A8%8B%E5%BA%8F%E5%86%85%E5%AD%98%E6%B3%84%E9%9C%B2%E9%97%AE%E9%A2%98%E5%BF%AB%E9%80%9F%E5%AE%9A%E4%BD%8D/#/schema/breadcrumb/1","name":"Breadcrumbs","itemListElement":[{"@type":"ListItem","position":1,"item":{"@type":"WebPage","@id":"/","url":"/","name":"Home"}},{"@type":"ListItem","position":2,"item":{"@id":"/blog2021-04-14-go%E7%A8%8B%E5%BA%8F%E5%86%85%E5%AD%98%E6%B3%84%E9%9C%B2%E9%97%AE%E9%A2%98%E5%BF%AB%E9%80%9F%E5%AE%9A%E4%BD%8D/"}}]},{"@context":"https://schema.org","@graph":[{"@type":"Article","@id":"/#/schema/article/1","headline":"Go程序内存泄露问题快速定位","description":"","isPartOf":{"@id":"/blog/2021-04-14-go%E7%A8%8B%E5%BA%8F%E5%86%85%E5%AD%98%E6%B3%84%E9%9C%B2%E9%97%AE%E9%A2%98%E5%BF%AB%E9%80%9F%E5%AE%9A%E4%BD%8D/"},"mainEntityOfPage":{"@id":"/blog/2021-04-14-go%E7%A8%8B%E5%BA%8F%E5%86%85%E5%AD%98%E6%B3%84%E9%9C%B2%E9%97%AE%E9%A2%98%E5%BF%AB%E9%80%9F%E5%AE%9A%E4%BD%8D/"},"datePublished":"2021-04-14T18:00:00CET","dateModified":"2021-04-14T18:00:00CET","author":{"@id":"/#/schema/person/2"},"publisher":{"@id":"/#/schema/person/1"},"image":{"@id":"/blog/2021-04-14-go%E7%A8%8B%E5%BA%8F%E5%86%85%E5%AD%98%E6%B3%84%E9%9C%B2%E9%97%AE%E9%A2%98%E5%BF%AB%E9%80%9F%E5%AE%9A%E4%BD%8D/#/schema/image/2"}}]},{"@context":"https://schema.org","@graph":[{"@type":"Person","@id":"/#/schema/person/2","name":null,"sameAs":[]}]},{"@context":"https://schema.org","@graph":[{"@type":"ImageObject","@id":"/blog/2021-04-14-go%E7%A8%8B%E5%BA%8F%E5%86%85%E5%AD%98%E6%B3%84%E9%9C%B2%E9%97%AE%E9%A2%98%E5%BF%AB%E9%80%9F%E5%AE%9A%E4%BD%8D/#/schema/image/2","url":"/doks.png","contentUrl":"/doks.png","caption":"Go程序内存泄露问题快速定位"}]}]}</script><meta name=theme-color content="#fff"><link rel=icon href=/favicon.ico sizes=any><link rel=icon type=image/svg+xml href=/favicon.svg><link rel=apple-touch-icon sizes=180x180 href=/apple-touch-icon.png><link rel=icon type=image/png sizes=32x32 href=/favicon-32x32.png><link rel=icon type=image/png sizes=16x16 href=/favicon-16x16.png><link rel=manifest crossorigin=use-credentials href=/site.webmanifest><script type=text/javascript src="https://platform-api.sharethis.com/js/sharethis.js#property=607868a58d7101001829a8df&product=sop" async></script><style>[alt~=sharing]{border:0;box-shadow:none}div#st-1{text-align:unset}div#st-1 .st-btn{height:24px;padding:0 4px}div#st-1 .st-btn>img{top:4.2px}div#st-2 .st-btn{height:24px;padding:0 4px}div#st-2 .st-btn>img{top:4.2px}</style></head><body class="blog single"><div class=sticky-top><div class=header-bar></div><header class="navbar navbar-expand-lg navbar-light doks-navbar"><nav class="container-xxl flex-wrap flex-lg-nowrap" aria-label="Main navigation"><a class="navbar-brand order-0" href=/ aria-label=MySpace>MySpace</a>
+<button class="btn btn-menu order-2 d-block d-lg-none" type=button data-bs-toggle=offcanvas data-bs-target=#offcanvasDoks aria-controls=offcanvasDoks aria-label="Open main menu"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentcolor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-menu"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button><div class="offcanvas offcanvas-end border-0 py-lg-1" tabindex=-1 id=offcanvasDoks data-bs-backdrop=true aria-labelledby=offcanvasDoksLabel><div class="header-bar d-lg-none"></div><div class="offcanvas-header d-lg-none"><h2 class="h5 offcanvas-title ps-2" id=offcanvasDoksLabel><a class=text-dark href=/>MySpace</a></h2><button type=button class="btn-close text-reset me-2" data-bs-dismiss=offcanvas aria-label="Close main menu"></button></div><div class="offcanvas-body p-4 p-lg-0"><ul class="nav flex-column flex-lg-row align-items-lg-center mt-2 mt-lg-0 ms-lg-2 me-lg-auto"><li class=nav-item><a class="nav-link ps-0 py-1 active" href=/blog/>Blog</a></li><li class=nav-item><a class="nav-link ps-0 py-1" href=/books/>Books</a></li><li class=nav-item><a class="nav-link ps-0 py-1" href=/journey/introduction>Journey</a></li></ul><hr class="text-black-50 my-4 d-lg-none"><form class="doks-search position-relative flex-grow-1 ms-lg-auto me-lg-2"><input id=search class="form-control is-search" type=search placeholder="Search docs..." aria-label="Search docs..." autocomplete=off><div id=suggestions class="shadow bg-white rounded d-none"></div></form><hr class="text-black-50 my-4 d-lg-none"><ul class="nav flex-column flex-lg-row"><li class=nav-item><a class="nav-link social-link" href=https://twitter.com/hitzhangjie><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentcolor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-twitter"><path d="M23 3a10.9 10.9.0 01-3.14 1.53 4.48 4.48.0 00-7.86 3v1A10.66 10.66.0 013 4s-4 9 5 13a11.64 11.64.0 01-7 2c9 5 20 0 20-11.5a4.5 4.5.0 00-.08-.83A7.72 7.72.0 0023 3z"/></svg><small class="ms-2 d-lg-none">Twitter</small></a></li><li class=nav-item><a class="nav-link social-link" href=https://github.com/hitzhangjie><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentcolor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-github"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37.0 00-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44.0 0020 4.77 5.07 5.07.0 0019.91 1S18.73.65 16 2.48a13.38 13.38.0 00-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07.0 005 4.77 5.44 5.44.0 003.5 8.55c0 5.42 3.3 6.61 6.44 7A3.37 3.37.0 009 18.13V22"/></svg><small class="ms-2 d-lg-none">GitHub</small></a></li></ul></div></div></nav></header></div><div class="wrap container-xxl" role=document><div class=content><div class="row flex-xl-nowrap"><div class="col-lg-5 col-xl-4 docs-sidebar"><nav class=docs-links aria-label="Main navigation"><h3>Tag List</h3><ol><li><a href=/tags/go/>go</a></li><li><a href=/tags/cgo/>cgo</a></li><li><a href=/tags/pprof/>pprof</a></li><li><a href=/tags/bpf/>bpf</a></li><li><a href=/tags/bcc/>bcc</a></li><li><a href=/tags/%e5%86%85%e5%ad%98%e6%b3%84%e9%9c%b2/>内存泄露</a></li></ol></nav></div><nav class="docs-toc d-none d-xl-block col-xl-3" aria-label="Secondary navigation"><div class=page-links><h3>On this page</h3><nav id=TableOfContents><ul><li><ul><li><a href=#内存泄漏>内存泄漏</a></li><li><a href=#服务质量>服务质量</a></li><li><a href=#go内存泄漏>Go内存泄漏</a><ul><li><a href=#垃圾回收>垃圾回收</a></li><li><a href=#内存泄漏场景>内存泄漏场景</a></li></ul></li><li><a href=#内存泄露排查>内存泄露排查</a><ul><li><a href=#借助pprof排查>借助pprof排查</a><ul><li><a href=#pprof类型>pprof类型</a></li><li><a href=#pprof操作>pprof操作</a></li><li><a href=#pprof示例协程泄露>pprof示例：协程泄露</a></li></ul></li><li><a href=#借助bcc排查>借助bcc排查</a><ul><li><a href=#pprof这个我干不了>pprof：这个我干不了</a></li><li><a href=#库函数hook库函数>库函数：hook库函数</a></li><li><a href=#kernel谁能逃脱我的法眼>Kernel：谁能逃脱我的法眼</a></li><li><a href=#bcc-ebpf-toolkit测量性能分析>BCC (eBPF toolkit)：测量、性能分析</a></li><li><a href=#bcc内存泄露示例>BCC：内存泄露示例</a></li><li><a href=#bccmemleak实现>bcc/memleak实现</a></li></ul></li><li><a href=#借助pmapgdb排查>借助pmap/gdb排查</a><ul><li><a href=#内存及pmap基础>内存及pmap基础</a></li><li><a href=#排查示例用例准备>排查示例：用例准备</a></li><li><a href=#排查示例搜索可疑内存区>排查示例：搜索可疑内存区</a></li></ul></li><li><a href=#其他方式>其他方式</a></li></ul></li><li><a href=#总结>总结</a></li><li><a href=#参考内容>参考内容</a></li></ul></li></ul></nav></div></nav><main class="docs-content col-lg-11 col-xl-9"><h1>Go程序内存泄露问题快速定位</h1><div style=display:flex><div>分享:&nbsp;&nbsp;</div><div><div class=sharethis-inline-share-buttons></div></div></div><hr><p class=lead></p><style>.myimg{width:680px;padding-bottom:1rem}</style><p>前几天有同学反馈了cgo内存泄露问题，自己也针对这个问题探索了一番，算是为以后解决类似问题提前攒点经验吧。也趁机整理了一下go开发过程中内存泄露问题的一些常用排查方法，也希望对新接触go的同学有所帮助。整理之余，bcc工具之丰富也让我有点惊讶，也希望对自己日后的工作有所帮助吧。</p><h2 id=内存泄漏>内存泄漏 <a href=#%e5%86%85%e5%ad%98%e6%b3%84%e6%bc%8f class=anchor aria-hidden=true>#</a><a href=#内存泄漏 class=anchor aria-hidden=true>#</a></h2><p>内存泄露，一个老生常谈的问题，但即便是老手也会犯一些低级错误。如果没有可靠的研发流程保证在测试阶段发现问题，问题就容易被带到线上。计算资源始终是有限的，问题也不会因为资源充裕就消失不见，产生影响只是时间问题。影响有多大，就要结合场景来说了。</p><p>内存泄漏，最可能的影响就是内存申请失败。但实际上操作系统更聪明，结合系统整体负载情况，它会为每个进程计算一个oom_score，并在内存资源紧张时选择一个合适的进程杀死并回收内存资源，see <a href=https://unix.stackexchange.com/a/153586/95211>how does the oom killer decide which process to kill first</a>。</p><p>所以，内存泄露的最终结果，大概率会被操作系统kill，通常进程挂掉后，确认其是否是因为oom问题被kill，可以通过查看 <code>/proc/messages</code> 来确认是否有对应日志。有的话，那就坐实了oom killed（但是被oom killed的进程不一定意味着存在内存泄露）。</p><h2 id=服务质量>服务质量 <a href=#%e6%9c%8d%e5%8a%a1%e8%b4%a8%e9%87%8f class=anchor aria-hidden=true>#</a><a href=#服务质量 class=anchor aria-hidden=true>#</a></h2><p>结合运维手段的变化，来看看是否内存泄漏问题对服务质量造成的影响。</p><ul><li>传统人工方式，通过感知告警、人为介入这种方式，效率低，要十几分钟；</li><li>通过虚拟机自动化部署的方式，感知异常自动重启虚拟机，耗时大约要分钟级；</li><li>通过docker容器化部署的方式，感知异常自动重启容器，耗时大约在秒级；</li></ul><p>看上去现代运维方式一定程度上可以缓解这个问题，是，这也要分情况：</p><ul><li>如果内存泄露的代码路径不容易被触发，那可能要跑很久才能触发oom kill，如一周；但是如果代码路径在关键代码路径上，且请求量大，频繁触发内存泄露，那可能跑个几分钟就会挂掉；</li><li>跟每次内存泄露的内存大小也有关系，如果泄露的少，多苟活一阵子，反之容易暴毙；</li><li>进程一旦挂掉，这段时间就不能响应了，服务的健康监测、名字服务、负载均衡等措施需要一段时间才能感知到，如果请求量大，服务不可用依然会带来比较大的影响。</li></ul><p>服务质量保证是不变的，所以别管用了什么运维手段，问题终究是问题，也是要解决的。</p><h2 id=go内存泄漏>Go内存泄漏 <a href=#go%e5%86%85%e5%ad%98%e6%b3%84%e6%bc%8f class=anchor aria-hidden=true>#</a><a href=#go内存泄漏 class=anchor aria-hidden=true>#</a></h2><h3 id=垃圾回收>垃圾回收 <a href=#%e5%9e%83%e5%9c%be%e5%9b%9e%e6%94%b6 class=anchor aria-hidden=true>#</a><a href=#垃圾回收 class=anchor aria-hidden=true>#</a></h3><p>自动内存管理减轻了开发人员管理内存的复杂性，不需要像C\C++开发者那样显示malloc、free，或者new、delete。垃圾回收借助于一些垃圾回收算法完成对无用内存的清理，垃圾回收算法有很多，比如：引用计数、标记清除、拷贝、分代等等。</p><p>Go中垃圾回收器采用的是“并发三色标记清除”算法，see:</p><ol><li><a href=https://www.ardanlabs.com/blog/2018/12/garbage-collection-in-go-part1-semantics.html>Garbage Collection In Go : Part I - Semantics</a></li><li><a href=https://www.ardanlabs.com/blog/2019/05/garbage-collection-in-go-part2-gctraces.html>Garbage Collection In Go : Part II - GC Traces</a></li><li><a href=https://www.ardanlabs.com/blog/2019/07/garbage-collection-in-go-part3-gcpacing.html>Garbage Collection In Go : Part III - GC Pacing</a></li></ol><p>Go语言支持自动内存管理，那还存在内存泄漏问题吗？</p><p>理论上，垃圾回收（gc）算法能够对堆内存进行有效的清理，这个是没什么可质疑的。但是要理解，垃圾回收能够正常运行的前提是，程序中必须解除对内存的引用，这样垃圾回收才会将其判定为可回收内存并回收。</p><h3 id=内存泄漏场景>内存泄漏场景 <a href=#%e5%86%85%e5%ad%98%e6%b3%84%e6%bc%8f%e5%9c%ba%e6%99%af class=anchor aria-hidden=true>#</a><a href=#内存泄漏场景 class=anchor aria-hidden=true>#</a></h3><p>实际情况是，编码中确实存在一些场景，会造成“<strong>临时性</strong>”或者“<strong>永久性</strong>”内存泄露，是需要开发人员加深对编程语言设计实现、编译器特性的理解之后才能优化掉的，see：<a href=https://go101.org/article/memory-leaking.html>go memory leaking scenarios</a>。</p><p>即便是临时性内存泄漏，考虑到有限的内存资源、内存申请大小、申请频率、释放频率因素，也会造成进程oom killed的结果。所以，开发人员对待每一行代码还是要心存敬畏，对待内存资源也还是要慎重。</p><p>常见的内存泄露场景，go101进行了讨论，总结了如下几种：</p><ul><li><a href=https://go101.org/article/memory-leaking.html>Kind of memory leaking caused by substrings</a></li><li><a href=https://go101.org/article/memory-leaking.html>Kind of memory leaking caused by subslices</a></li><li><a href=https://go101.org/article/memory-leaking.html>Kind of memory leaking caused by not resetting pointers in lost slice elements</a></li><li><a href=https://go101.org/article/memory-leaking.html>Real memory leaking caused by hanging goroutines</a></li><li><a href=https://go101.org/article/memory-leaking.html>real memory leadking caused by not stopping <code>time.Ticker</code> values which are not used any more</a></li><li><a href=https://go101.org/article/memory-leaking.html>Real memory leaking caused by using finalizers improperly</a></li><li><a href=https://go101.org/article/defer-more.html#kind-of-resource-leaking>Kind of resource leaking by deferring function calls</a></li></ul><p>简单归纳一下，还是“临时性”内存泄露和“永久性”内存泄露：</p><ul><li>临时性泄露，指的是该释放的内存资源没有及时释放，对应的内存资源仍然有机会在更晚些时候被释放，即便如此在内存资源紧张情况下，也会是个问题。这类主要是string、slice底层buffer的错误共享，导致无用数据对象无法及时释放，或者defer函数导致的资源没有及时释放。</li><li>永久性泄露，指的是在进程后续生命周期内，泄露的内存都没有机会回收，如goroutine内部预期之外的<code>for-loop</code>或者<code>chan select-case</code>导致的无法退出的情况，导致协程栈及引用内存永久泄露问题。</li></ul><h2 id=内存泄露排查>内存泄露排查 <a href=#%e5%86%85%e5%ad%98%e6%b3%84%e9%9c%b2%e6%8e%92%e6%9f%a5 class=anchor aria-hidden=true>#</a><a href=#内存泄露排查 class=anchor aria-hidden=true>#</a></h2><p>初步怀疑程序存在内存泄露问题，可能是因为进程oom killed，或者是因为top显示内存占用持续增加无法稳定在一个合理值。不管如何发现的，明确存在这一问题之后，就需要及时选择合适的方法定位到问题的根源，并及时修复。</p><h3 id=借助pprof排查>借助pprof排查 <a href=#%e5%80%9f%e5%8a%a9pprof%e6%8e%92%e6%9f%a5 class=anchor aria-hidden=true>#</a><a href=#借助pprof排查 class=anchor aria-hidden=true>#</a></h3><h4 id=pprof类型>pprof类型 <a href=#pprof%e7%b1%bb%e5%9e%8b class=anchor aria-hidden=true>#</a><a href=#pprof类型 class=anchor aria-hidden=true>#</a></h4><p>go提供了pprof工具方便对运行中的go程序进行采样分析，支持对多种类型的采样分析：</p><ul><li>goroutine - stack traces of all current goroutines</li><li>heap - a sampling of all heap allocations</li><li>threadcreate - stack traces that led to the creation of new OS threads</li><li>block - stack traces that led to blocking on synchronization primitives</li><li>mutex - stack traces of holders of contended mutexes</li><li>profile - cpu profile</li><li>trace - allows collecting all the profiles for a certain duration</li></ul><h4 id=pprof操作>pprof操作 <a href=#pprof%e6%93%8d%e4%bd%9c class=anchor aria-hidden=true>#</a><a href=#pprof操作 class=anchor aria-hidden=true>#</a></h4><p>现在很多rpc框架有内置管理模块，允许访问管理端口通过<code>/debug/pprof</code>对服务进行采样分析（pprof会有一定的性能开销，最好分析前将负载均衡权重调低）。</p><p>集成pprof非常简单，只需要在工程中引入如下代码即可：</p><pre><code class=language-go>import _ &quot;net/http/pprof&quot;
+
+go func() {
+	log.Println(http.ListenAndServe(&quot;localhost:6060&quot;, nil))
+}()
+</code></pre><p>然后运行<code>go tool pprof</code>进行采样：</p><pre><code class=language-bash>go tool pprof -seconds=10 -http=:9999 http://localhost:6060/debug/pprof/heap
+</code></pre><p>有时可能存在网络隔离问题，不能直接从开发机访问测试机、线上机器，或者测试机、线上机器没有安装go，那也可以这么做：</p><pre><code class=language-bash>curl http://localhost:6060/debug/pprof/heap?seconds=30 &gt; heap.out
+
+# sz下载heap.out到本地
+go tool pprof heap.out
+</code></pre><p>go tool pprof可以收集两类采样数据：</p><ul><li><p>in_use，收集进程当前仍在使用中的内存；
+<img alt="pprof inuse space" class=myimg src=/blog/assets/pprof/pprof_inuse_space.png></p></li><li><p>alloc，收集自进程启动后的总的内存分配情况，包括已经释放掉的内存；
+<img alt="pprof alloc space" class=myimg src=/blog/assets/pprof/pprof_alloc_space.png></p></li></ul><p>go tool pprof展示采样信息时，申请内存以“<strong>红色</strong>”显示，释放内存以“<strong>绿色</strong>”显示。</p><p>允许采样完成后打开一个浏览器页面（通过ip:port访问），交互式地查看采样结果信息，例如callgraph、flamegraph、top信息。</p><h4 id=pprof示例协程泄露>pprof示例：协程泄露 <a href=#pprof%e7%a4%ba%e4%be%8b%e5%8d%8f%e7%a8%8b%e6%b3%84%e9%9c%b2 class=anchor aria-hidden=true>#</a><a href=#pprof示例协程泄露 class=anchor aria-hidden=true>#</a></h4><img alt=callgraph class=myimg src=/blog/assets/pprof/malg.png><p>其中有2条红色的很醒目的路径，这是造成内存占用升高的主要路径，需要重点分析。以右边这条红色路径为例，最终走到了<code>runtime.malg</code>，碰到这个函数，联想前面总结的常见内存泄露场景，要有这样的意识：“这里可能涉及到goroutine泄露”，即goroutine创建了很多，但是goroutine没有正常执行结束，对应的协程使用的内存没有释放。</p><p>此时根据上述callgraph中的线索检查程序中启动goroutine的地方，以及goroutine是否有正常退出的逻辑保证，就能比较方便地定位到泄露原因了。</p><p>上述callgraph中展示了两条导致内存分配占用高的路径，但是其中左边一条可能是正常情况下的内存使用情况，而右边这条可能是异常情况。在分析阶段，我们需要有能力区分哪些内存分配是正常情况，哪些情况是异常情况。pprof提供了另外一个有用的选项<code>-diff_base</code>，我们可以在没有服务没有请求时采样30s生成一个采样文件，然后有请求时，我们再采样30s生成另一个采样文件，并将两个采样文件进行对比。这样就容易分析出请求出现时，到底发生了什么。</p><pre><code class=language-bash>go tool pprof -http=':8081'           \
+   -diff_base heap-new-16:22:04:N.out \
+   heap-new-17:32:38:N.out
+</code></pre><img alt=malg3 class=myimg src=/blog/assets/pprof/malg3.png><p>这样问题看起来就更非常明确了，请求出现时处理请求的过程中启动了新协程执行处理。<code>runtime.malg</code>就是创建新协程，其内部会分配协程栈，这个栈在使用过程中会动态伸缩，并在协程退出时才会被销毁。</p><p>由pprof heap确定了存在goroutine泄露问题，但我们还不知道此goroutine在何处启动的，为此，我们继续pprof goroutine。</p><pre><code class=language-bash>go tool pprof -seconds=10   \
+   -http=:8081              \
+   http://localhost:6060/debug/pprof/goroutines
+</code></pre><img alt=goroutines class=myimg src=/blog/assets/pprof/goroutines.png><p>现在通过上述callgraph我们很容易定位到goroutine是在哪里启动的了，回到源码中进一步确认：</p><pre><code class=language-go>var ticker = time.NewTicker(time.Second)
+
+go func() {
+  for {
+    select {
+    case &lt;-ticker.C:
+      // doSomething
+    }
+  }
+}()
+
+func somefunc(...) {
+  ticker.Stop()
+}
+</code></pre><p>原来当前协程因为ticker.C这个chan read操作阻塞了，需要注意的是<code>time.Ticker.Stop()</code>之后，ticker.C这个chan不会被关闭，最好在执行ticker.Stop()的时候，同时设置一个通知chan，close该chan来表示ticker停止。</p><pre><code class=language-go>var ticker = time.NewTicker(time.Second)
+var chdone = make(chan int, 1)
+
+go func() {
+  for {
+    select {
+    case &lt;-ticker.C:
+      sa.read()
+    case &lt;- chdone:
+    	return
+    }
+  }
+}()
+
+func somefunc(...) {
+    ticker.Stop()
+    close(chdone)
+}
+</code></pre><p>这里介绍了pprof的使用方法，pprof是每个go开发人员都应该掌握的。希望读者借助这里的示例能帮助读者了解pprof的操作、分析过程，达到灵活运用的程度还需要日常开发工作中多实践。</p><h3 id=借助bcc排查>借助bcc排查 <a href=#%e5%80%9f%e5%8a%a9bcc%e6%8e%92%e6%9f%a5 class=anchor aria-hidden=true>#</a><a href=#借助bcc排查 class=anchor aria-hidden=true>#</a></h3><h4 id=pprof这个我干不了>pprof：这个我干不了 <a href=#pprof%e8%bf%99%e4%b8%aa%e6%88%91%e5%b9%b2%e4%b8%8d%e4%ba%86 class=anchor aria-hidden=true>#</a><a href=#pprof这个我干不了 class=anchor aria-hidden=true>#</a></h4><p>pprof对于分析纯go程序是非常有帮助的，但是对于cgo有点无能为力，cgo部分的代码已经跳出了go内存分配器的范围，采样也没用，那cgo部分出现内存泄露该如何排查呢？</p><ul><li>要确定进程是否出现了内存泄露，可以观察进程运行期间的内存占用情况，如借助top、free -m，或者其他运维平台的监控系统，一般k8s都集成了prometheus对容器运行情况进行了监视。如果内存占用随着时间延长一直增长，没有在合理的内存占用值附近稳定下来，或者已经出现了oom killed、容器重启的问题出现，则可以初步判定进程存在内存泄露；</li><li>继续借助pprof工具排查go程序，如果pprof可以排查出明显的内存泄露问题，则内存泄漏问题可能是纯go部分代码引起，采用前面描述的分析、定位方法来解决；</li><li>如果pprof工具采样之后，没有发现明显的内存泄露的端倪，且程序中存在cgo部分的代码，怀疑cgo部分的代码存在内存泄露，此时则需借助其他手段（pprof无能为力了）来进一步分析cgo部分的可能异常；</li></ul><h4 id=库函数hook库函数>库函数：hook库函数 <a href=#%e5%ba%93%e5%87%bd%e6%95%b0hook%e5%ba%93%e5%87%bd%e6%95%b0 class=anchor aria-hidden=true>#</a><a href=#库函数hook库函数 class=anchor aria-hidden=true>#</a></h4><p>要分析内存是否存在泄漏，也可以考虑自己hook一下库函数，自己实现这种我们就不展开讨论了。还是看看有没有趁手的好工具，能实实在在地、靠谱地帮我们解决实际问题（尽管趁手的工具也可能也是基于某种hook的能力实现的）。</p><h4 id=kernel谁能逃脱我的法眼>Kernel：谁能逃脱我的法眼 <a href=#kernel%e8%b0%81%e8%83%bd%e9%80%83%e8%84%b1%e6%88%91%e7%9a%84%e6%b3%95%e7%9c%bc class=anchor aria-hidden=true>#</a><a href=#kernel谁能逃脱我的法眼 class=anchor aria-hidden=true>#</a></h4><p>内存分配操作，一般会借助一些库函数来完成，内存分配器也会做一些分配算法的优化，这里不关心这些，最终的内存申请操作还是要由操作系统来代劳，而请求内核服务的操作则是通过系统调用。</p><p>操作系统提供了一些服务，允许对运行中的进程进行观测，以Linux为例，借助ptrace系统调用+PTRACE_SYSCALL，允许我们对一个运行中的进程执行的所有系统调用进行观测，ltrace、strace就是在此基础上实现的。</p><p>eBPF（extended BPF）的前辈是BPF（Berkeley Packet Filtering），BPF是一个ByteCode VM，它的数据模型限制于packet，经常用来做一些包分析，经典的如tcpdump。eBPF相比BPF，其数据模型不再受限于单一的packet，也不再只是用来分析packet的单一功能，可以利用它将eBPF program挂到任意的tracepoint或者kprobe去执行分析处理。这一下子打开了eBPF的万花筒，使得能够对内核各个子系统做观测、做性能分析，等等。</p><img alt="bcc tracing tools" class=myimg src=/blog/assets/pprof/bcc_tracing_tools_2019.png><p>各种测量、性能分析工具，真是亮瞎我的眼睛。</p><h4 id=bcc-ebpf-toolkit测量性能分析>BCC (eBPF toolkit)：测量、性能分析 <a href=#bcc-ebpf-toolkit%e6%b5%8b%e9%87%8f%e6%80%a7%e8%83%bd%e5%88%86%e6%9e%90 class=anchor aria-hidden=true>#</a><a href=#bcc-ebpf-toolkit测量性能分析 class=anchor aria-hidden=true>#</a></h4><p>如何基于eBPF写eBPF program来完成希望的测量、分析呢，see <a href=https://github.com/iovisor/bcc>iovisor/bcc</a>：</p><blockquote><p>BCC is a toolkit for creating efficient kernel tracing and manipulation programs, and includes several useful tools and examples. It makes use of extended BPF (Berkeley Packet Filters), formally known as eBPF, a new feature that was first added to Linux 3.15.</p><p>eBPF was <a href=https://lkml.org/lkml/2015/4/14/232>described by</a> Ingo Molnár as:</p><blockquote><p>One of the more interesting features in this cycle is the ability to attach eBPF programs (user-defined, sandboxed bytecode executed by the kernel) to kprobes. This allows user-defined instrumentation on a live kernel image that can never crash, hang or interfere with the kernel negatively.</p></blockquote><p>BCC makes BPF programs easier to write, with kernel instrumentation in C (and includes a C wrapper around LLVM), and front-ends in Python and lua. It is suited for many tasks, including performance analysis and network traffic control.</p></blockquote><p>BCC算是一个开发套件，在它基础上开发eBPF program会更简单，该仓库内当前已经拥有了非常丰富的测量、分析工具，工具之丰富，只差我能不能全部掌握了，也想成为像<a href=http://www.brendangregg.com/blog/index.html>Brendan Gregg</a>一样的性能分析专家。</p><blockquote><p>Brendan Gregg: Understanding all the Linux tracers to make a rational decision between them a huge undertaking. (I may be the only person who has come close to doing this.)</p></blockquote><p>至于如何实现一个BCC工具，则非常简单，实际上就是写一个python文件，内部一个字符串包含一个c程序，c程序内调用封装的eBPF API，看一个简单的demo：</p><pre><code class=language-python>#file: hello-open-world-1.py
+
+from bcc import BPF
+program = &quot;&quot;&quot;
+#include &lt;asm/ptrace.h&gt; // for struct pt_regs
+#include &lt;linux/types.h&gt; // for mode_t
+int kprobe__sys_open(struct pt_regs *ctx,
+char __user* pathname, int flags, mode_t mode) {
+bpf_trace_printk(&quot;sys_open called.\\n&quot;);
+return 0;
+}
+&quot;&quot;&quot;
+b = BPF(text=program)
+b.trace_print()
+</code></pre><p>运行它：</p><pre><code class=language-bash>$ sudo python hello-open-world-1.py
+</code></pre><p>OK，BCC套件里面提供了工具memleak，用来对内存泄露进行分析，下面结合一个cgo内存泄露的示例分析，来了解下如何是使用。</p><p>建议能花点时间了解下linux tracing systems，see <a href=https://jvns.ca/blog/2017/07/05/linux-tracing-systems>linux tracing systems & how they fit together</a> ，理清下kprobe/uprobe/dtrace probes/kernel tracepoints的含义及工作原理，进而才能认识到eBPF的强大之处，不再展开了，看个示例。</p><h4 id=bcc内存泄露示例>BCC：内存泄露示例 <a href=#bcc%e5%86%85%e5%ad%98%e6%b3%84%e9%9c%b2%e7%a4%ba%e4%be%8b class=anchor aria-hidden=true>#</a><a href=#bcc内存泄露示例 class=anchor aria-hidden=true>#</a></h4><p>下面先看一个cgo示例工程是如何组织的，示例项目取自https://github.com/2Dou/cgo-example，您可以直接从这里下载。</p><pre><code class=language-bash>c-so/
+├── Makefile
+├── add
+│   ├── Makefile
+│   ├── add.go
+│   └── src
+│       ├── add.c
+│       └── add.h
+└── main.go
+</code></pre><p>上述工程中，add/src/下add.h/add.c实现了一个add函数，add/add.go中定义了可导出的函数<code>Add(a, b int) int</code>，内部通过cgo调用src下定义的<code>int add(int, int)</code>，add/Makefile将把add下的源文件整个编译构建打包成一个共享库文件libadd.so，供c-so/main.go调用。</p><p>c-so/main.go引用目录add下定义的package add中的Add函数，c-so/Makefile只是简单的go build编译动作，编译完成后<code>./c-so</code>运行会提示库文件libadd.so不存在，这是因为库路径加载问题，执行<code>LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$(pwd -p) ./c-so</code>即可，程序正常运行。</p><p>OK，现在简单地篡改下src/add.c，将其内容修改如下，插入了一段不停申请内存的代码：</p><pre><code class=language-c>#include &quot;add.h&quot;
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;unistd.h&gt;
+
+int add(int a, int b) {
+  
+  /******* insert memory leakage start ********/
+  int i = 0;
+  int max = 0x7fffffff;
+  
+  for (; i&lt;max; i++) {
+    int *p = (int *)malloc(sizeof(int) * 8);
+    sleep(1);
+    if (i % 2 == 0) {
+      free(p)
+    }
+  }
+  /******* insert memory leakage end ********/
+  return a+b;
+}
+</code></pre><p>现在重新执行make编译之后，再次运行，程序不断地malloc但是从来不free，内存一点点被泄露，现在我们看看如何借助memleak分析内存泄露的位置：</p><pre><code class=language-bash>$ /usr/share/bcc/tools/memleak -p $(pid of c-so)
+</code></pre><p>运行一段时间以后，memleak报告了内存分配的情况，显示的是“<strong>top10的还没有释放的内存分配</strong>”的位置信息：</p><img alt=memleak class=myimg src=/blog/assets/pprof/memleak.png><blockquote><p>Trace <strong>outstanding</strong> memory allocations <strong>that weren&rsquo;t freed</strong>.</p><p>Supports both user-mode allocations made with libc functions and kernel-mode allocations made with kmalloc/kmem_cache_alloc/get_free_pages and corresponding memory release functions.</p></blockquote><p>从memleak报告的最后一条信息来看：</p><ul><li>c-so这个程序运行过程中，调用了共享库libadd.so中的add函数；</li><li>这个add函数执行了345+次内存分配操作，每次申请<code>sizeof(int)*8</code> bytes，总共分配了11048次内存；</li><li>内存分配malloc操作的位置大约就是add函数起始处+0x28的指令位置，可以通过objdump -dS libadd.so求证。</li></ul><p>现在我们可以看到内存分配的位置、次数、内存数量，但是这个报告中报道的并非实际泄露的内存数量，比如我们也有free，怎么没有统计到呢？运行<code>memleak -h</code>查看下有哪些选项吧！</p><pre><code class=language-bash>$ /usr/share/bcc/tools/memleak -p $(pid of c-so) -t
+</code></pre><img alt="memleak -t" class=myimg src=/blog/assets/pprof/memleak2.png><p>现在可以看到报告信息中包含了alloc entered/exited，free entered/exited，可以断定memleak也跟踪了内存释放，但是这里的报告还是不够直观，能否直接显示泄露的内存信息呢？可以但是要稍微修改下，下面看下实现，你会发现现有的报告信息也不妨碍分析。</p><h4 id=bccmemleak实现>bcc/memleak实现 <a href=#bccmemleak%e5%ae%9e%e7%8e%b0 class=anchor aria-hidden=true>#</a><a href=#bccmemleak实现 class=anchor aria-hidden=true>#</a></h4><p>不看下源码，总感觉心里有点虚，看下memleak这个eBPF program中的部分逻辑：</p><p>跟踪malloc：</p><pre><code>int malloc_enter(struct pt_regs *ctx, size_t size)
+    \-&gt; static inline int gen_alloc_enter(struct pt_regs *ctx, size_t size)
+        : 内部会更新被观测进程已分配的内存数量（sizes记录）
+int malloc_exit(struct pt_regs *ctx)
+    \-&gt; static inline int gen_alloc_exit(struct pt_regs *ctx)
+        \-&gt; static inline int gen_alloc_exit2(struct pt_regs *ctx, u64 address)
+            ：内部会记录当前申请的内存地址（allocs记录） 
+        \-&gt; stack_traces.get_stackid(ctx, STACK_FLAGS)
+            ：记录当前内存分配动作的调用栈信息（allocs中记录）
+</code></pre><p>跟踪free：</p><pre><code class=language-bash>int free_enter(struct pt_regs *ctx, void *address)
+    \-&gt; static inline int gen_free_enter(struct pt_regs *ctx, void *address)
+        ：从allocs中删除已经释放的内存地址
+</code></pre><p>memleak周期性地对allocs进行排序，并按照sizes分配内存多少降序排列打印出来，因为memleak同时跟踪了malloc、free，所以一段时间后，周期性打印的内存分配调用栈位置，即可以认为是没有释放掉（泄露掉）的内存分配位置。</p><h3 id=借助pmapgdb排查>借助pmap/gdb排查 <a href=#%e5%80%9f%e5%8a%a9pmapgdb%e6%8e%92%e6%9f%a5 class=anchor aria-hidden=true>#</a><a href=#借助pmapgdb排查 class=anchor aria-hidden=true>#</a></h3><p>这也是一种比较通用的排查方式，在排查内存泄露问题时，根据实际情况（比如环境问题无法安装go，bcc之类分析工具等等）甚至可考虑先通过pmap这种方式来分析一下。总之，灵活选择合适的方式吧。</p><h4 id=内存及pmap基础>内存及pmap基础 <a href=#%e5%86%85%e5%ad%98%e5%8f%8apmap%e5%9f%ba%e7%a1%80 class=anchor aria-hidden=true>#</a><a href=#内存及pmap基础 class=anchor aria-hidden=true>#</a></h4><p>进程中的内存区域分类可以按下面几个维度来划分，如果对这个不熟，建议参考以下文章，see:</p><ul><li><a href=https://techtalk.intersec.com/2013/07/memory-part-1-memory-types/>Memory Types</a></li><li><a href=https://techtalk.intersec.com/2013/07/memory-part-2-understanding-process-memory/>Understanding Process Memory</a></li><li><a href=https://techtalk.intersec.com/2013/08/memory-part-3-managing-memory/>Managing Memory</a></li></ul><table><thead><tr><th style=text-align:left></th><th style=text-align:left>Private</th><th style=text-align:left>Shared</th></tr></thead><tbody><tr><td style=text-align:left>Anonymous</td><td style=text-align:left>stack<br>malloc<br>mmap(anon+private)<br>brk/sbrk</td><td style=text-align:left>mmap(anon+shared)</td></tr><tr><td style=text-align:left>File-backed</td><td style=text-align:left>mmap(fd, private)<br>binary/shared libraries</td><td style=text-align:left>mmap(fd, shared)</td></tr></tbody></table><p>借助pmap可以查看进程内存空间分布情况，包括地址范围、大小、内存映射情况，如：</p><pre><code class=language-bash>$ pmap -p &lt;pid&gt;      # /proc/&lt;pid&gt;/maps
+
+3009:   ./blah
+0000000000400000      4K r-x--  /home/fruneau/blah
+0000000000401000      4K rw---  /home/fruneau/blah
+00007fbb5da87000  51200K rw-s-  /dev/zero (deleted)
+00007fbb60c87000   1536K r-x--  /lib/x86_64-linux-gnu/libc-2.13.so
+00007fbb60e07000   2048K -----  /lib/x86_64-linux-gnu/libc-2.13.so
+00007fbb61007000     16K r----  /lib/x86_64-linux-gnu/libc-2.13.so
+00007fbb6100b000      4K rw---  /lib/x86_64-linux-gnu/libc-2.13.so
+00007fbb6100c000     20K rw---    [ anon ]
+00007fbb61011000    128K r-x--  /lib/x86_64-linux-gnu/ld-2.13.so
+00007fbb61221000     12K rw---    [ anon ]
+00007fbb6122e000      8K rw---    [ anon ]
+00007fbb61230000      4K r----  /lib/x86_64-linux-gnu/ld-2.13.so
+00007fbb61231000      4K rw---  /lib/x86_64-linux-gnu/ld-2.13.so
+00007fbb61232000      4K rw---    [ anon ]
+00007fff9350f000    132K rw---    [ stack ]
+00007fff9356e000      4K r-x--    [ anon ]
+ffffffffff600000      4K r-x--    [ anon ]
+total             55132K
+</code></pre><pre><code>$ pmap -x -p &lt;pid&gt;   # /proc/&lt;pid&gt;/smaps
+
+Address           Kbytes     RSS   Dirty Mode   Mapping
+0000000000400000       4       4       4 r-x--  blah
+0000000000401000       4       4       4 rw---  blah
+00007fc3b50df000   51200   51200   51200 rw-s-  zero (deleted)
+00007fc3b82df000    1536     188       0 r-x--  libc-2.13.so
+00007fc3b845f000    2048       0       0 -----  libc-2.13.so
+00007fc3b865f000      16      16      16 r----  libc-2.13.so
+00007fc3b8663000       4       4       4 rw---  libc-2.13.so
+00007fc3b8664000      20      12      12 rw---    [ anon ]
+00007fc3b8669000     128     108       0 r-x--  ld-2.13.so
+00007fc3b8879000      12      12      12 rw---    [ anon ]
+00007fc3b8886000       8       8       8 rw---    [ anon ]
+00007fc3b8888000       4       4       4 r----  ld-2.13.so
+00007fc3b8889000       4       4       4 rw---  ld-2.13.so
+00007fc3b888a000       4       4       4 rw---    [ anon ]
+00007fff7e6ef000     132      12      12 rw---    [ stack ]
+00007fff7e773000       4       4       0 r-x--    [ anon ]
+ffffffffff600000       4       0       0 r-x--    [ anon ]
+----------------  ------  ------  ------
+total kB           55132   51584   51284
+</code></pre><p>上述命令只是输出信息的详细程度不同，在我们理解了进程的内存类型、pmap的使用之后，就可以对发生内存泄露的程序进行一定的分析。</p><h4 id=排查示例用例准备>排查示例：用例准备 <a href=#%e6%8e%92%e6%9f%a5%e7%a4%ba%e4%be%8b%e7%94%a8%e4%be%8b%e5%87%86%e5%a4%87 class=anchor aria-hidden=true>#</a><a href=#排查示例用例准备 class=anchor aria-hidden=true>#</a></h4><p>比如现在写一个测试用的程序，目录结构如下：</p><pre><code class=language-bash>leaks
+|-- conf
+|   `-- load.go
+|-- go.mod
+|-- leaks
+|-- main.go
+`-- task
+    `-- load.go
+</code></pre><p>file: main.go，该文件启动conf、task下的两个逻辑，conf.LoadConfig中启动一个循环，每次申请1KB内存并全部设置为字符C，task.NewTask启动一个循环，每次申请1KB内存并设置为字符T。
+conf.LoadConfig循环体每次迭代间隔1s，task.NewTask循环体每次迭代间隔2s。</p><pre><code class=language-go>package main
+
+import (
+    &quot;leaks/conf&quot;
+    &quot;leaks/task&quot;
+)
+
+func main() {
+    conf.LoadConfig(&quot;aaa&quot;)
+    task.NewTask(&quot;bbb&quot;)
+
+    select {}
+}
+</code></pre><p>file: conf/load.go:</p><pre><code class=language-go>package conf
+
+import (
+    &quot;time&quot;
+)
+
+type Config struct {
+    A string
+    B string
+    C string
+}
+
+func LoadConfig(fp string) (*Config, error) {
+
+    kb := 1 &lt;&lt; 10
+
+    go func() {
+        for {
+            p := make([]byte, kb, kb)
+            for i := 0; i &lt; kb; i++ {
+                p[i] = 'C'
+            }
+            time.Sleep(time.Second * 1)
+            println(&quot;conf&quot;)
+        }
+    }()
+    return &amp;Config{}, nil
+}
+</code></pre><p>file: task/load.go</p><pre><code class=language-go>package task
+
+import (
+    &quot;time&quot;
+)
+
+type Task struct {
+    A string
+    B string
+    C string
+}
+
+func NewTask(name string) (*Task, error) {
+
+    kb := 1 &lt;&lt; 10
+
+    // start async process
+    go func() {
+        for {
+            p := make([]byte, kb, kb)
+            for i := 0; i &lt; kb; i++ {
+                p[i] = 'T'
+            }
+            time.Sleep(time.Second * 2)
+            println(&quot;task&quot;)
+        }
+    }()
+
+    return &amp;Task{}, nil
+}
+</code></pre><p>然后编译构建 <code>go build</code> 输出可执行文件 <code>leaks</code>，大家可能注意到了，我这样的写法并没有什么特殊的，是会被garbage collector回收掉的，顶多是回收快慢而已。</p><p>是的，为了方便我们解释pmap排查方法的运用，我们假定这里的内存泄露掉了，怎么个假定法呢？我们关闭gc，运行程序的时候 <code>GOGC=off ./leaks</code>.</p><p>你可以用 <code>top -p $(pidof leaks)</code> 验证下RSS飞涨。</p><h4 id=排查示例搜索可疑内存区>排查示例：搜索可疑内存区 <a href=#%e6%8e%92%e6%9f%a5%e7%a4%ba%e4%be%8b%e6%90%9c%e7%b4%a2%e5%8f%af%e7%96%91%e5%86%85%e5%ad%98%e5%8c%ba class=anchor aria-hidden=true>#</a><a href=#排查示例搜索可疑内存区 class=anchor aria-hidden=true>#</a></h4><p>比如，你发现有段anon内存区域，它的占用内存数量在增加，或者这样的区段数量再增加（可以对比前后两次的pmap输出来发现）:</p><pre><code class=language-bash>$ pmap -x $(pidof leaks) &gt; 1.txt
+$ pmap -x $(pidof leaks) &gt; 2.txt
+
+86754:   ./leaks/leaks                                          86754:   ./leaks/leaks
+Address           Kbytes     RSS   Dirty Mode  Mapping          Address           Kbytes     RSS   Dirty Mode  Mapping
+0000000000400000     372     372       0 r-x-- leaks            0000000000400000     372     372       0 r-x-- leaks
+000000000045d000     496     476       0 r---- leaks            000000000045d000     496     476       0 r---- leaks
+00000000004d9000      16      16      16 rw--- leaks            00000000004d9000      16      16      16 rw--- leaks
+00000000004dd000     176      36      36 rw---   [ anon ]       00000000004dd000     176      36      36 rw---   [ anon ]
+000000c000000000  131072   98508   98508 rw---   [ anon ]     | 000000c000000000  131072  104652  104652 rw---   [ anon ]
+00007f26010ad000   39816    3236    3236 rw---   [ anon ]     | 00007f26010ad000   39816    3432    3432 rw---   [ anon ]
+00007f260378f000  263680       0       0 -----   [ anon ]       00007f260378f000  263680       0       0 -----   [ anon ]
+00007f261390f000       4       4       4 rw---   [ anon ]       00007f261390f000       4       4       4 rw---   [ anon ]
+00007f2613910000  293564       0       0 -----   [ anon ]       00007f2613910000  293564       0       0 -----   [ anon ]
+00007f26257bf000       4       4       4 rw---   [ anon ]       00007f26257bf000       4       4       4 rw---   [ anon ]
+00007f26257c0000   36692       0       0 -----   [ anon ]       00007f26257c0000   36692       0       0 -----   [ anon ]
+00007f2627b95000       4       4       4 rw---   [ anon ]       00007f2627b95000       4       4       4 rw---   [ anon ]
+00007f2627b96000    4580       0       0 -----   [ anon ]       00007f2627b96000    4580       0       0 -----   [ anon ]
+00007f262800f000       4       4       4 rw---   [ anon ]       00007f262800f000       4       4       4 rw---   [ anon ]
+00007f2628010000     508       0       0 -----   [ anon ]       00007f2628010000     508       0       0 -----   [ anon ]
+00007f262808f000     384      44      44 rw---   [ anon ]       00007f262808f000     384      44      44 rw---   [ anon ]
+00007ffcdd81c000     132      12      12 rw---   [ stack ]      00007ffcdd81c000     132      12      12 rw---   [ stack ]
+00007ffcdd86d000      12       0       0 r----   [ anon ]       00007ffcdd86d000      12       0       0 r----   [ anon ]
+00007ffcdd870000       8       4       0 r-x--   [ anon ]       00007ffcdd870000       8       4       0 r-x--   [ anon ]
+ffffffffff600000       4       0       0 r-x--   [ anon ]       ffffffffff600000       4       0       0 r-x--   [ anon ]
+---------------- ------- ------- -------                        ---------------- ------- ------- -------
+total kB          771528  102720  101868                      | total kB          771528  109060  108208
+</code></pre><p>我们注意到起始地址为<code>000000c000000000</code> 和 <code>00007f26010ad000</code>的区间，RSS内存数量涨了，这说明这里物理内存占用增加了，在明确程序存在内存泄露的前提下，这样的内存区域可以作为可疑内存区去分析一下。或者，是有连续的大内存区块，也是待分析的可疑对象，或者这样的内存区块数量比较多，也应该作为可疑的分析对象。</p><p>找到可疑内存区域之后，就尝试里面的内容导出，导出后再借助strings、hexdump等工具进行分析，通常会打印出一些字符串相关的信息，一般这些信息会帮我们联想起，这些数据大约对应着程序中的哪些数据结构、代码逻辑。</p><p>先执行 <code>gdb -p $(pidof leaks)</code> attach 目标进程，然后执行下面两条命令导出可疑内存区：</p><pre><code>gdb&gt; dump binary memory leaks.p1 0x000000c000000000 0x000000c000000000+131072*1024
+gdb&gt; dump binary memory leaks.p2 0x00007f26010ad000 0x00007f26010ad000+39816*1024
+</code></pre><p>然后尝试用strings或者hexdump</p><pre><code class=language-bash>$ strings leaks.p1
+
+...
+e[0;34m\]\W\[$(git_color)\]$(git_branch) \[\e[0;37m\]$\[\e[0m\]
+SXPFD
+EXPF
+e[0;34m\]\W\[$(git_color)\]$(git_branch) \[\e[0;37m\]$\[\e[0m\]
+SXPFD
+EXPF
+TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT...CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC...TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT....CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC...TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC...TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC...TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT
+...
+</code></pre><p>or</p><pre><code class=language-bash>$ hexdump -C leaks.p1
+
+...
+
+0008e030  00 00 00 00 00 00 00 00  08 9d f0 00 35 43 00 00  |............5C..|
+0008e040  01 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  |................|
+0008e050  00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  |................|
+*
+00090000  00 e0 08 00 c0 00 00 00  00 00 00 00 00 00 00 00  |................|
+00090010  00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  |................|
+*
+00100000  54 54 54 54 54 54 54 54  54 54 54 54 54 54 54 54  |TTTTTTTTTTTTTTTT|
+*
+00200000  43 43 43 43 43 43 43 43  43 43 43 43 43 43 43 43  |CCCCCCCCCCCCCCCC|
+*
+00400000  54 54 54 54 54 54 54 54  54 54 54 54 54 54 54 54  |TTTTTTTTTTTTTTTT|
+*
+00500000  43 43 43 43 43 43 43 43  43 43 43 43 43 43 43 43  |CCCCCCCCCCCCCCCC|
+*
+00700000  54 54 54 54 54 54 54 54  54 54 54 54 54 54 54 54  |TTTTTTTTTTTTTTTT|
+*
+00800000  43 43 43 43 43 43 43 43  43 43 43 43 43 43 43 43  |CCCCCCCCCCCCCCCC|
+*
+00a00000  54 54 54 54 54 54 54 54  54 54 54 54 54 54 54 54  |TTTTTTTTTTTTTTTT|
+*
+00b00000  43 43 43 43 43 43 43 43  43 43 43 43 43 43 43 43  |CCCCCCCCCCCCCCCC|
+*
+00d00000  54 54 54 54 54 54 54 54  54 54 54 54 54 54 54 54  |TTTTTTTTTTTTTTTT|
+*
+00e00000  43 43 43 43 43 43 43 43  43 43 43 43 43 43 43 43  |CCCCCCCCCCCCCCCC|
+*
+01000000  54 54 54 54 54 54 54 54  54 54 54 54 54 54 54 54  |TTTTTTTTTTTTTTTT|
+*
+
+...
+</code></pre><p>通过这里的输出，假定这里的输出的一些字符串信息<code>CCCCCCC</code> or <code>TTTTTTTTT</code>是一些更有意义的信息，那它可能帮助我们和程序中的一些数据结构、代码逻辑建立起联系，比如看到这里的字符串C，就想到了配置加载conf.LoadConfig，看到字符串T，就想到了task.NewTask，然后进去追查一下一般也能定位到问题所在。</p><p>使用 gcore转储整个进程，原理类似，gcore会在转储完后立即detach进程，比手动dump速度快，对traced进程的影响时间短，但是转储文件一般比较大（记得ulimit -c设置下），core文件使用hexdump分析的时候也可以选择性跳过一些字节，以分析感兴趣的可疑内存区。</p><h3 id=其他方式>其他方式 <a href=#%e5%85%b6%e4%bb%96%e6%96%b9%e5%bc%8f class=anchor aria-hidden=true>#</a><a href=#其他方式 class=anchor aria-hidden=true>#</a></h3><p>内存泄露的排查方式有很多，工具也有很多，比如比较有名的valgrind，但是我测试过程中，valgrind没有像bcc那样精确地定位到内存泄露的位置，可能是我的使用方式有问题。see <a href="https://www.youtube.com/watch?v=jiSWxpcuGPw">debugging cgo memory leaks</a>，感兴趣的可以自己研究下。这里就不再展开了。</p><h2 id=总结>总结 <a href=#%e6%80%bb%e7%bb%93 class=anchor aria-hidden=true>#</a><a href=#总结 class=anchor aria-hidden=true>#</a></h2><p>本文介绍了内存泄露相关的定位分析方法，虽然是面向go开发介绍的，但是也不局限于go，特别是ebpf-memleak的应用，应用面应该会比较广。eBPF对Linux内核版本是有严格要求的，使用过程中也需要注意，eBPF的优势在于它为观测、测量提供了强大的基础支持，所以bcc才会有那么多的分析工具，是不可多得利器。</p><p>本文也算是自己对eBPF的一个初步尝试吧，希望掌握它对自己以后的工作有帮助。开发人员手上可以用的工具不少，但是真的好用、省心的也没有那么多，如果能bcc一行代码定位到位置，我想我也不会愿意pmap、gdb gcore、gdb dump、strings+hexdump&mldr;来分析内存泄露位置，当然如果情况不允许，比如内核版本不支持bcc，那还是灵活选择合适的方式。</p><p>除了掌握上述分析方法，解决已经引入的内存泄露问题，研发流程上也应该多关注上线前测试、CR等基础的规范，尽量将一些问题前置，早发现早解决。</p><h2 id=参考内容>参考内容 <a href=#%e5%8f%82%e8%80%83%e5%86%85%e5%ae%b9 class=anchor aria-hidden=true>#</a><a href=#参考内容 class=anchor aria-hidden=true>#</a></h2><ul><li>memory leaking, https://go101.org/article/memory-leaking.html</li><li>golang memory leaks, https://yuriktech.com/2020/11/07/Golang-Memory-Leaks/#:~:text=A%20goroutine%20leak%20happens%20when,an%20out%20of%20memory%20exception.</li><li>finding memory leak in cgo, https://kirshatrov.com/2019/11/04/finding-memory-leak-in-cgo/</li><li>dive-into-bpf, https://qmonnet.github.io/whirl-offload/2016/09/01/dive-into-bpf/</li><li>introduction to xdp and ebpf, https://blogs.igalia.com/dpino/2019/01/07/introduction-to-xdp-and-ebpf/</li><li>debugging cgo memory leaks, https://www.youtube.com/watch?v=jiSWxpcuGPw</li><li>choosing a linux tracer, http://www.brendangregg.com/blog/2015-07-08/choosing-a-linux-tracer.html</li><li>taming tracepoints in the linux kernel, https://blogs.oracle.com/linux/taming-tracepoints-in-the-linux-kernel</li><li>linux tracing systems & how they fit together, https://jvns.ca/blog/2017/07/05/linux-tracing-systems/</li></ul><div class=edit-page><a href=https://github.com/hitzhangjie/myspace/blob/master/content/blog/2021-04-14-Go%e7%a8%8b%e5%ba%8f%e5%86%85%e5%ad%98%e6%b3%84%e9%9c%b2%e9%97%ae%e9%a2%98%e5%bf%ab%e9%80%9f%e5%ae%9a%e4%bd%8d.md><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentcolor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-edit-2"><path d="M17 3a2.828 2.828.0 114 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>Edit this page on GitHub</a></div><div class="docs-navigation d-flex justify-content-between"><a href=/blog/2021-04-16-%E5%A6%82%E4%BD%95%E7%9C%8B%E5%BE%85gopanic%E5%8F%8A%E5%BC%82%E5%B8%B8%E5%A4%84%E7%90%86/><div class="card my-1"><div class="card-body py-2">&larr; 如何看待gopanic及异常处理</div></div></a><a class=ms-auto href=/blog/2020-04-03-%E8%BF%9F%E5%88%B0%E7%9A%842020%E5%B9%B4%E6%80%BB%E7%BB%93/><div class="card my-1"><div class="card-body py-2">迟到的2020年总结 &rarr;</div></div></a></div></main></div></div></div><footer class="footer text-muted"><div class=container-xxl><div class=row><div class="col-lg-8 order-last order-lg-first"><ul class=list-inline><li class=list-inline-item>Powered by <a class=text-muted href=https://www.netlify.com/>Netlify</a>, <a class=text-muted href=https://gohugo.io/>Hugo</a>, and <a class=text-muted href=https://getdoks.org/>Doks</a></li></ul></div><div class="col-lg-8 order-first order-lg-last text-lg-end"><ul class=list-inline></ul></div><div class=col-lg-8 align=right><p><font size=-1>站点构建版本：v</font></p></div></div></div></footer><script src=/js/bootstrap.min.fdbe9b9ba88a036135318f3c721784d684ac9e3280fe282cc80d7d49f7f9c82780cd54228c1608685a230c09984300d7946fc471734d566fcebc148b65bd16db.js integrity="sha512-/b6bm6iKA2E1MY88cheE1oSsnjKA/igsyA19Sff5yCeAzVQijBYIaFojDAmYQwDXlG/EcXNNVm/OvBSLZb0W2w==" crossorigin=anonymous defer></script>
+<script src=/js/highlight.min.451fe6185924dcedf55c767559b5130f666f31c989f0078a75bafc346ad7364e180edfd731b1ca6bae0e90dfee88842885d284126ab0879f5067399e3a02b09e.js integrity="sha512-RR/mGFkk3O31XHZ1WbUTD2ZvMcmJ8AeKdbr8NGrXNk4YDt/XMbHKa64OkN/uiIQohdKEEmqwh59QZzmeOgKwng==" crossorigin=anonymous defer></script>
+<script src=/main.min.f16ffd9b364013a1df84be9cd7a45c470cb48639766bf5551e05bba845fe4ab150cb6436de43609bfed9af47c23bd5e395e9a10b932fa6fb2c4ee8f6cc78d7a3.js integrity="sha512-8W/9mzZAE6HfhL6c16RcRwy0hjl2a/VVHgW7qEX+SrFQy2Q23kNgm/7Zr0fCO9XjlemhC5MvpvssTuj2zHjXow==" crossorigin=anonymous defer></script>
+<script src=/index.min.4f5da6d5d5039814b7640914dc6d7af9b1826b54a2e8027123e345920f33e3dab6f98ed3b275444c8e3ce3de9faa12475d34fad04a0140d0a99b28e75bc5267c.js integrity="sha512-T12m1dUDmBS3ZAkU3G16+bGCa1Si6AJxI+NFkg8z49q2+Y7TsnVETI48496fqhJHXTT60EoBQNCpmyjnW8UmfA==" crossorigin=anonymous defer></script></body></html>

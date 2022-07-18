@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>ShardedMap on</title><link>/tags/shardedmap/</link><description>Recent content in ShardedMap on</description><generator>Hugo -- gohugo.io</generator><language>en-US</language><lastBuildDate>Tue, 15 Jun 2021 15:52:11 +0800</lastBuildDate><atom:link href="/tags/shardedmap/index.xml" rel="self" type="application/rss+xml"/><item><title>go map设计实现及应用选型</title><link>/blog/2021-06-15-go-map%E8%AE%BE%E8%AE%A1%E5%AE%9E%E7%8E%B0%E5%8F%8A%E5%BA%94%E7%94%A8%E9%80%89%E5%9E%8B/</link><pubDate>Tue, 15 Jun 2021 15:52:11 +0800</pubDate><guid>/blog/2021-06-15-go-map%E8%AE%BE%E8%AE%A1%E5%AE%9E%E7%8E%B0%E5%8F%8A%E5%BA%94%E7%94%A8%E9%80%89%E5%9E%8B/</guid><description>map大致实现 # buckets &amp;amp; overflow # 本文介绍了map的内部数据结构，每个桶8个kvpairs，超过了可以用溢出桶，但是溢出桶会降低map性能，所以会创建新的bucket将数据迁到新bucket里面。
+hash &amp;amp; top hash table # 一个kvpairs存储在哪个bucket里面呢，首先根据key计算hash，然后对buckets数量取余，再放到对应桶里面，如果有空位置就放入，没有就需要走前面提到的溢出桶的逻辑。
+根据key计算出的hash除了计算key分布在哪个桶，还有其他用途，每个桶里都有一个top hash构成的数组，是为了map访问时加快查询key所在的数组索引的，通过减少比较key的耗时来加速访问。
+mapaccess_faststr, mapaccess_fast64&amp;hellip;访问map中元素时，根据key类型不同编译器插入不同的函数调用，函数名后缀表示key的类型，为什么有不同的函数呢？这是为了提高key的hash计算效率和比较效率。
+load factor # 装填因子，是用来控制map装填的元素数量，即元素数量除以桶数量。装填因子过小容易浪费内存空间，过大容易引发更多的碰撞冲突导致性能下降。
+initialization &amp;amp;&amp;amp; lazy initialization # map提前初始化再赋值，比lazy初始化后再赋值效率高，为什么呢？lazy初始化桶是后面创建的更花时间。但是lazy初始化相比较而言容易节省内存。
+kvpairs padding # map中kvpairs的存储有考虑内存占用方面的优化，key的类型和value的类型可能不同，所以在数据对齐过程中padding会浪费不少内存，所以go map中的keys和values是分开存储的，先存储keys再存储values。
+并发安全检测 # map中的并发读写问题，go提供了如下方式进行检查：
+data race detection：通过选项-race来检测是否存在data race，关于data race检测的问题，kavya joshi的分享里有介绍；
+concurrent map writes：map对应的数据结构hmap中有个字段flags来记录当前的map操作，比如当前执行m[1]=1，是一个kv的赋值，对应的函数是mapassign_fast64，如果执行的是delete(m, 1)，对应的函数是mapdelete_fast64，这里的map修改操作对应的函数内部会将hmap.flags^=hashWriting，如果已经有一个写操作在执行，后面又有一个写操作执行，后面的写操作就有很大概率检测到flags的hashWriting位被设置了，此时就会抛出错误“concurrent map writes”错误；
+关于map为什么不直接提供并发安全的版本，原因也简单。并发安全的版本是有同步开销的，但是很多时候并不需要并发安全的版本，如果默认实现是并发安全的，性能上就要大打折扣了。不考虑并发安全问题的话，map比sync.Map要快7~10倍。
+并发安全实现 # sync.Map是并发安全的实现，它对某些场景下的并发读写做了性能方面的优化：
+&amp;ldquo;The Map type is optimized for two common use cases: (1) when the entry for a given key is only ever written once but read many times, as in caches that only grow, (2) when multiple goroutines read, write and overwrite entries for disjoint sets of keys.</description></item></channel></rss>

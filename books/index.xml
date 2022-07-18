@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>My Books on</title><link>/books/</link><description>Recent content in My Books on</description><generator>Hugo -- gohugo.io</generator><language>en-US</language><lastBuildDate>Tue, 06 Oct 2020 08:48:23 +0000</lastBuildDate><atom:link href="/books/index.xml" rel="self" type="application/rss+xml"/><item><title>Debugger101: Go调试器开发内幕</title><link>/books/debugger101/</link><pubDate>Tue, 06 Oct 2020 08:48:23 +0000</pubDate><guid>/books/debugger101/</guid><description>授人以鱼不如授人以渔，调试器正是这样一款工具，它虽然不知道您程序中何处引入了bug或者理解不到位，但是当你想到它、捡起它，它就可以指引你一步步追根溯源。
+不仅要做授人以渔的工具，也要做授人以渔的人，不禁要问读者，你们可曾了解过调试器的内部实现？它是如何控制你程序执行的，它是如何知道指定内存地址处的指令或者数据类型的…本书旨在帮助读者打通对编译、调试工具链、调试信息标准以及操作系统之间的认识，使具备一定的调试器定制化开发的能力。
+由于本书内容涉及大量系统原理、调试信息标准、设计实现、go源码分析内容，篇幅很大，很难用几篇博文讲述清楚，因此单独写一本电子书，《Debugger101：go调试器开发内幕》。
+欢迎阅读，如您在阅读过程中遇到错误、疏漏、建议，不要犹豫，请给我提issue。</description></item><item><title>GoRPC101: 微服务框架开发内幕</title><link>/books/gorpc101/</link><pubDate>Tue, 06 Oct 2020 08:48:23 +0000</pubDate><guid>/books/gorpc101/</guid><description>如今微服务架构大行其道，微服务框架也层出不穷，如grpc、springcloud、vert.x、ballerina，等等，这也反映出技术团队对开发效率、运营质量的不断探索与追求。合格的工程师要熟练运用框架，有追求的工程师则应掌握更全面的技能，能对框架进行定制化开发。
+由于本内容涉及到大量的设计实现、系统原理、性能调优、研发流程、工程素养、社区维护等等诸多内容，几篇博文实在难以介绍清楚。为了保证内容的完整性，让读者能够感受到笔者微服务框架开发工作中的真实例程，还是决定单独写一本电子书，《GoRPC101：微服务框架开发内幕》。
+欢迎阅读，如果您在阅读过程中发现有错误、疏漏、建议，不要很犹豫，请给我提issue。</description></item><item><title>libmill: go风格协程库设计实现</title><link>/books/libmill/</link><pubDate>Tue, 06 Oct 2020 08:48:23 +0000</pubDate><guid>/books/libmill/</guid><description>我们只想要一个协程化的开发能力以及基于CSP的数据共享，难道我们就需要一门新的语言，比如golang？有很多开发人员曾经提出类似的质疑，笔者刚接触go时也抱着类似的想法。那么不妨思考下如果用c/c++的话，如果要实现上述功能，应该如何实现呢？
+ZeroMQ之父Martin Sustrik就用1w多行代码实现了一个非常优雅的go风格协程库，不妨来一起学习下。
+本内容涉及大量的系统基础知识、设计实现细节，为了保证知识点的系统性，单独写了一本电子书，《libmill：go风格协程库设计实现》。
+欢迎阅读，如果您在阅读过程中发现有错误、疏漏、建议，不要犹豫，请给我提issue。</description></item></channel></rss>

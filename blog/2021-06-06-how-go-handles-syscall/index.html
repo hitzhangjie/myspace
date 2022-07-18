@@ -1,0 +1,372 @@
+<!doctype html><html lang=en-us><head><meta charset=utf-8><meta http-equiv=x-ua-compatible content="ie=edge"><meta name=viewport content="width=device-width,initial-scale=1,shrink-to-fit=no"><link rel=preload as=font href=/fonts/vendor/jost/jost-v4-latin-regular.woff2 type=font/woff2 crossorigin><link rel=preload as=font href=/fonts/vendor/jost/jost-v4-latin-500.woff2 type=font/woff2 crossorigin><link rel=preload as=font href=/fonts/vendor/jost/jost-v4-latin-700.woff2 type=font/woff2 crossorigin><link rel=stylesheet href=/main.63b6b8ff933309fcc94a30e21d69932290c8643fa1a32893f5681778c776ed3e51c237a1acd00b42426b3bf780c351b4a6ce75b3b659915ef0dd610b2e027a8c.css integrity="sha512-Y7a4/5MzCfzJSjDiHWmTIpDIZD+hoyiT9WgXeMd27T5RwjehrNALQkJrO/eAw1G0ps51s7ZZkV7w3WELLgJ6jA==" crossorigin=anonymous><noscript><style>img.lazyload{display:none}</style></noscript><meta name=robots content="index, follow"><meta name=googlebot content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1"><meta name=bingbot content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1"><title>syscall：how does go runtime handles syscall - MySpace</title><meta name=description content="1 How go runtime handle syscall ? # 最近遇到个线上服务频繁陷入系统调用导致go运行时创建了大量线程，影响到了服务质量，定位、解决问题之后，希望能进一步探究go运行时处理系统调用的过程，以便加深理解。参考了不少网友的分享，特别是知乎Golang Inernal专栏，结合个人的学习理解在此整理记录一下，与大家分享。
+1.1 前言 # 在开始结合源码进行分析之前，先做下简单的介绍，方便先从整体上把握go对系统调用的处理过程，然后从第二部分开始，再结合源码介绍具体的细节。
+系统调用分为阻塞系统调用、非阻塞系统调用，go里面对这些系统调用有归类整理，详见源文件：/src/syscall/syscall_linux_amd64.go。
+如下图所示，sys开头的表示的是阻塞系统调用，会调用Syscall，以sysnb开头的是非阻塞系统调用，会调用RawSyscall，关于Syscall和RawSyscall的区别下面整理。阻塞型的系统调用本身会阻塞线程，为了避免线程阻塞导致协程不可调度，golang运行时要感知这样的系统调用并做特殊处理，非阻塞的系统调用直接调即可，不需要golang运行时参与。 Syscall定义在asm_linux_amd64.s里面，代码中有runtime.entersyscall(SB)和runtime.exitsyscall(SB)函数调用，这个是与golang运行时进行交互的，用于通知golang运行时我即将发起或者退出一个系统调用。
+对于会导致阻塞的系统调用，都要通过Syscall来调用来通知golang运行时，以便golang运行时做处理，如创建新的物理线程调度器其它的goroutine，避免整个进程无线程可调度而最终被sysmon杀死进程。 对于某些非阻塞的系统调用，就不必再与golang运行时交互了，直接调用就可以，这样可以减少两次与golang运行时交互的函数调用开销，这里就掉的是RawSyscall： 网络io操作本来也是阻塞的，但是因为socket fd会被设置为non-blocking，系统调用虽然还是阻塞的系统调用，但是已经不会阻塞调用线程了，所以也无所谓了。
+有个脚本mksyscall.pl根据syscall_linux_amd64.go里面定义的系通调用列表，就是第一张图那些带注释的部分，这个pl脚本会负责生成与之相关的系统调用函数，生成在syscall/zsyscall_linux_amd64.go里面。可以找几个有代表性的来看下生成的系统调用函数：
+比如sendfile是阻塞的系统调用： 比如settimeofday是非阻塞的系统调用： epoll相关的epollwait也是阻塞的，但是网络socket fd在go里面都统一设置为了nonblocking fd处理了，因此并不会阻塞。 1.2 开始分析源码 # 在讲述系统调用发生的协程调度之前，让我们看看go是如何进入系统调用的，理解了这个让我们不会对后面所说的一些东西感到很陌生。
+golang对操作系统的系统调用作了封装，提供了syscall这样的库让我们执行系统调用。例如，Read系统调用实现如下：
+func Read(fd int, p []byte) (n int, err error) { n, err = read(fd, p) if raceenabled { if n &amp;gt; 0 { ...... } ...... } return } // 最终封装了Syscall func read(fd int, p []byte) (n int, err error) { var _p0 unsafe."><link rel=canonical href=/blog/2021-06-06-how-go-handles-syscall/><meta property="og:locale" content="en_US"><meta property="og:type" content="article"><meta property="og:title" content="syscall：how does go runtime handles syscall"><meta property="og:description" content="1 How go runtime handle syscall ? # 最近遇到个线上服务频繁陷入系统调用导致go运行时创建了大量线程，影响到了服务质量，定位、解决问题之后，希望能进一步探究go运行时处理系统调用的过程，以便加深理解。参考了不少网友的分享，特别是知乎Golang Inernal专栏，结合个人的学习理解在此整理记录一下，与大家分享。
+1.1 前言 # 在开始结合源码进行分析之前，先做下简单的介绍，方便先从整体上把握go对系统调用的处理过程，然后从第二部分开始，再结合源码介绍具体的细节。
+系统调用分为阻塞系统调用、非阻塞系统调用，go里面对这些系统调用有归类整理，详见源文件：/src/syscall/syscall_linux_amd64.go。
+如下图所示，sys开头的表示的是阻塞系统调用，会调用Syscall，以sysnb开头的是非阻塞系统调用，会调用RawSyscall，关于Syscall和RawSyscall的区别下面整理。阻塞型的系统调用本身会阻塞线程，为了避免线程阻塞导致协程不可调度，golang运行时要感知这样的系统调用并做特殊处理，非阻塞的系统调用直接调即可，不需要golang运行时参与。 Syscall定义在asm_linux_amd64.s里面，代码中有runtime.entersyscall(SB)和runtime.exitsyscall(SB)函数调用，这个是与golang运行时进行交互的，用于通知golang运行时我即将发起或者退出一个系统调用。
+对于会导致阻塞的系统调用，都要通过Syscall来调用来通知golang运行时，以便golang运行时做处理，如创建新的物理线程调度器其它的goroutine，避免整个进程无线程可调度而最终被sysmon杀死进程。 对于某些非阻塞的系统调用，就不必再与golang运行时交互了，直接调用就可以，这样可以减少两次与golang运行时交互的函数调用开销，这里就掉的是RawSyscall： 网络io操作本来也是阻塞的，但是因为socket fd会被设置为non-blocking，系统调用虽然还是阻塞的系统调用，但是已经不会阻塞调用线程了，所以也无所谓了。
+有个脚本mksyscall.pl根据syscall_linux_amd64.go里面定义的系通调用列表，就是第一张图那些带注释的部分，这个pl脚本会负责生成与之相关的系统调用函数，生成在syscall/zsyscall_linux_amd64.go里面。可以找几个有代表性的来看下生成的系统调用函数：
+比如sendfile是阻塞的系统调用： 比如settimeofday是非阻塞的系统调用： epoll相关的epollwait也是阻塞的，但是网络socket fd在go里面都统一设置为了nonblocking fd处理了，因此并不会阻塞。 1.2 开始分析源码 # 在讲述系统调用发生的协程调度之前，让我们看看go是如何进入系统调用的，理解了这个让我们不会对后面所说的一些东西感到很陌生。
+golang对操作系统的系统调用作了封装，提供了syscall这样的库让我们执行系统调用。例如，Read系统调用实现如下：
+func Read(fd int, p []byte) (n int, err error) { n, err = read(fd, p) if raceenabled { if n > 0 { ...... } ...... } return } // 最终封装了Syscall func read(fd int, p []byte) (n int, err error) { var _p0 unsafe."><meta property="og:url" content="/blog/2021-06-06-how-go-handles-syscall/"><meta property="og:site_name" content="MySpace"><meta property="article:published_time" content="2021-06-06T10:17:34+08:00"><meta property="article:modified_time" content="2021-06-06T10:17:34+08:00"><meta property="og:image" content="/doks.png"><meta property="og:image:alt" content="MySpace"><meta name=twitter:card content="summary_large_image"><meta name=twitter:site content="@hitzhangjie"><meta name=twitter:creator content="@hitzhangjie"><meta name=twitter:title content="syscall：how does go runtime handles syscall"><meta name=twitter:description content><meta name=twitter:image content="/doks.png"><meta name=twitter:image:alt content="syscall：how does go runtime handles syscall"><script type=application/ld+json>{"@context":"https://schema.org","@graph":[{"@type":"Person","@id":"/#/schema/person/1","name":"","url":"/","sameAs":["https://twitter.com/hitzhangjie","https://www.linkedin.com/in/hitzhangjie/","https://github.com/hitzhangjie"],"image":{"@type":"ImageObject","@id":"/#/schema/image/1","url":"/\u003cnil\u003e","width":null,"height":null,"caption":""}},{"@type":"WebSite","@id":"/#/schema/website/1","url":"/","name":"MySpace","description":"MySpace is a hitzhangjie\u0027s personal space, for blogs, books, journey, thinkings.","publisher":{"@id":"/#/schema/person/1"}},{"@type":"WebPage","@id":"/blog/2021-06-06-how-go-handles-syscall/","url":"/blog/2021-06-06-how-go-handles-syscall/","name":"syscall：how does go runtime handles syscall","description":"","isPartOf":{"@id":"/#/schema/website/1"},"about":{"@id":"/#/schema/person/1"},"datePublished":"2021-06-06T10:17:34CET","dateModified":"2021-06-06T10:17:34CET","breadcrumb":{"@id":"/blog/2021-06-06-how-go-handles-syscall/#/schema/breadcrumb/1"},"primaryImageOfPage":{"@id":"/blog/2021-06-06-how-go-handles-syscall/#/schema/image/2"},"inLanguage":"","potentialAction":[{"@type":"ReadAction","target":["/blog/2021-06-06-how-go-handles-syscall/"]}]},{"@type":"BreadcrumbList","@id":"/blog/2021-06-06-how-go-handles-syscall/#/schema/breadcrumb/1","name":"Breadcrumbs","itemListElement":[{"@type":"ListItem","position":1,"item":{"@type":"WebPage","@id":"/","url":"/","name":"Home"}},{"@type":"ListItem","position":2,"item":{"@id":"/blog2021-06-06-how-go-handles-syscall/"}}]},{"@context":"https://schema.org","@graph":[{"@type":"Article","@id":"/#/schema/article/1","headline":"syscall：how does go runtime handles syscall","description":"","isPartOf":{"@id":"/blog/2021-06-06-how-go-handles-syscall/"},"mainEntityOfPage":{"@id":"/blog/2021-06-06-how-go-handles-syscall/"},"datePublished":"2021-06-06T10:17:34CET","dateModified":"2021-06-06T10:17:34CET","author":{"@id":"/#/schema/person/2"},"publisher":{"@id":"/#/schema/person/1"},"image":{"@id":"/blog/2021-06-06-how-go-handles-syscall/#/schema/image/2"}}]},{"@context":"https://schema.org","@graph":[{"@type":"Person","@id":"/#/schema/person/2","name":null,"sameAs":[]}]},{"@context":"https://schema.org","@graph":[{"@type":"ImageObject","@id":"/blog/2021-06-06-how-go-handles-syscall/#/schema/image/2","url":"/doks.png","contentUrl":"/doks.png","caption":"syscall：how does go runtime handles syscall"}]}]}</script><meta name=theme-color content="#fff"><link rel=icon href=/favicon.ico sizes=any><link rel=icon type=image/svg+xml href=/favicon.svg><link rel=apple-touch-icon sizes=180x180 href=/apple-touch-icon.png><link rel=icon type=image/png sizes=32x32 href=/favicon-32x32.png><link rel=icon type=image/png sizes=16x16 href=/favicon-16x16.png><link rel=manifest crossorigin=use-credentials href=/site.webmanifest><script type=text/javascript src="https://platform-api.sharethis.com/js/sharethis.js#property=607868a58d7101001829a8df&product=sop" async></script><style>[alt~=sharing]{border:0;box-shadow:none}div#st-1{text-align:unset}div#st-1 .st-btn{height:24px;padding:0 4px}div#st-1 .st-btn>img{top:4.2px}div#st-2 .st-btn{height:24px;padding:0 4px}div#st-2 .st-btn>img{top:4.2px}</style></head><body class="blog single"><div class=sticky-top><div class=header-bar></div><header class="navbar navbar-expand-lg navbar-light doks-navbar"><nav class="container-xxl flex-wrap flex-lg-nowrap" aria-label="Main navigation"><a class="navbar-brand order-0" href=/ aria-label=MySpace>MySpace</a>
+<button class="btn btn-menu order-2 d-block d-lg-none" type=button data-bs-toggle=offcanvas data-bs-target=#offcanvasDoks aria-controls=offcanvasDoks aria-label="Open main menu"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentcolor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-menu"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button><div class="offcanvas offcanvas-end border-0 py-lg-1" tabindex=-1 id=offcanvasDoks data-bs-backdrop=true aria-labelledby=offcanvasDoksLabel><div class="header-bar d-lg-none"></div><div class="offcanvas-header d-lg-none"><h2 class="h5 offcanvas-title ps-2" id=offcanvasDoksLabel><a class=text-dark href=/>MySpace</a></h2><button type=button class="btn-close text-reset me-2" data-bs-dismiss=offcanvas aria-label="Close main menu"></button></div><div class="offcanvas-body p-4 p-lg-0"><ul class="nav flex-column flex-lg-row align-items-lg-center mt-2 mt-lg-0 ms-lg-2 me-lg-auto"><li class=nav-item><a class="nav-link ps-0 py-1 active" href=/blog/>Blog</a></li><li class=nav-item><a class="nav-link ps-0 py-1" href=/books/>Books</a></li><li class=nav-item><a class="nav-link ps-0 py-1" href=/journey/introduction>Journey</a></li></ul><hr class="text-black-50 my-4 d-lg-none"><form class="doks-search position-relative flex-grow-1 ms-lg-auto me-lg-2"><input id=search class="form-control is-search" type=search placeholder="Search docs..." aria-label="Search docs..." autocomplete=off><div id=suggestions class="shadow bg-white rounded d-none"></div></form><hr class="text-black-50 my-4 d-lg-none"><ul class="nav flex-column flex-lg-row"><li class=nav-item><a class="nav-link social-link" href=https://twitter.com/hitzhangjie><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentcolor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-twitter"><path d="M23 3a10.9 10.9.0 01-3.14 1.53 4.48 4.48.0 00-7.86 3v1A10.66 10.66.0 013 4s-4 9 5 13a11.64 11.64.0 01-7 2c9 5 20 0 20-11.5a4.5 4.5.0 00-.08-.83A7.72 7.72.0 0023 3z"/></svg><small class="ms-2 d-lg-none">Twitter</small></a></li><li class=nav-item><a class="nav-link social-link" href=https://github.com/hitzhangjie><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentcolor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-github"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37.0 00-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44.0 0020 4.77 5.07 5.07.0 0019.91 1S18.73.65 16 2.48a13.38 13.38.0 00-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07.0 005 4.77 5.44 5.44.0 003.5 8.55c0 5.42 3.3 6.61 6.44 7A3.37 3.37.0 009 18.13V22"/></svg><small class="ms-2 d-lg-none">GitHub</small></a></li></ul></div></div></nav></header></div><div class="wrap container-xxl" role=document><div class=content><div class="row flex-xl-nowrap"><div class="col-lg-5 col-xl-4 docs-sidebar"><nav class=docs-links aria-label="Main navigation"><h3>Tag List</h3><ol><li><a href=/tags/go/>go</a></li><li><a href=/tags/runtime/>runtime</a></li><li><a href=/tags/syscall/>syscall</a></li></ol></nav></div><nav class="docs-toc d-none d-xl-block col-xl-3" aria-label="Secondary navigation"><div class=page-links><h3>On this page</h3><nav id=TableOfContents><ul><li><a href=#1-how-go-runtime-handle-syscall->1 How go runtime handle syscall ?</a><ul><li><a href=#11-前言>1.1 前言</a></li><li><a href=#12-开始分析源码>1.2 开始分析源码</a></li><li><a href=#13-进入系统调用前>1.3 进入系统调用前</a></li><li><a href=#14-从系统调用返回后>1.4 从系统调用返回后</a></li><li><a href=#15-sysmon>1.5 sysmon</a></li><li><a href=#16-总结>1.6 总结</a></li></ul></li></ul></nav></div></nav><main class="docs-content col-lg-11 col-xl-9"><h1>syscall：how does go runtime handles syscall</h1><div style=display:flex><div>分享:&nbsp;&nbsp;</div><div><div class=sharethis-inline-share-buttons></div></div></div><hr><p class=lead></p><h1 id=1-how-go-runtime-handle-syscall->1 How go runtime handle syscall ? <a href=#1-how-go-runtime-handle-syscall- class=anchor aria-hidden=true>#</a></h1><p>最近遇到个线上服务频繁陷入系统调用导致go运行时创建了大量线程，影响到了服务质量，定位、解决问题之后，希望能进一步探究go运行时处理系统调用的过程，以便加深理解。参考了不少网友的分享，特别是知乎Golang Inernal专栏，结合个人的学习理解在此整理记录一下，与大家分享。</p><h2 id=11-前言>1.1 前言 <a href=#11-%e5%89%8d%e8%a8%80 class=anchor aria-hidden=true>#</a><a href=#11-前言 class=anchor aria-hidden=true>#</a></h2><p>在开始结合源码进行分析之前，先做下简单的介绍，方便先从整体上把握go对系统调用的处理过程，然后从第二部分开始，再结合源码介绍具体的细节。</p><p>系统调用分为阻塞系统调用、非阻塞系统调用，go里面对这些系统调用有归类整理，详见源文件：<code>/src/syscall/syscall_linux_amd64.go</code>。</p><p>如下图所示，sys开头的表示的是阻塞系统调用，会调用Syscall，以sysnb开头的是非阻塞系统调用，会调用RawSyscall，关于Syscall和RawSyscall的区别下面整理。阻塞型的系统调用本身会阻塞线程，为了避免线程阻塞导致协程不可调度，golang运行时要感知这样的系统调用并做特殊处理，非阻塞的系统调用直接调即可，不需要golang运行时参与。
+<img alt=系统调用列表节选 src=/blog/assets/syscall/1545292741_96.png class=myimg></p><p>Syscall定义在asm_linux_amd64.s里面，代码中有<code>runtime.entersyscall(SB)</code>和<code>runtime.exitsyscall(SB)</code>函数调用，这个是与golang运行时进行交互的，用于通知golang运行时我即将发起或者退出一个系统调用。</p><p>对于会导致阻塞的系统调用，都要通过Syscall来调用来通知golang运行时，以便golang运行时做处理，如创建新的物理线程调度器其它的goroutine，避免整个进程无线程可调度而最终被sysmon杀死进程。
+<img alt=Syscall src=/blog/assets/syscall/1545292975_48.png class=myimg></p><p>对于某些非阻塞的系统调用，就不必再与golang运行时交互了，直接调用就可以，这样可以减少两次与golang运行时交互的函数调用开销，这里就掉的是RawSyscall：
+<img alt=RawSyscall src=/blog/assets/syscall/1545293027_28.png class=myimg></p><p>网络io操作本来也是阻塞的，但是因为socket fd会被设置为non-blocking，系统调用虽然还是阻塞的系统调用，但是已经不会阻塞调用线程了，所以也无所谓了。</p><p>有个脚本mksyscall.pl根据syscall_linux_amd64.go里面定义的系通调用列表，就是第一张图那些带注释的部分，这个pl脚本会负责生成与之相关的系统调用函数，生成在syscall/zsyscall_linux_amd64.go里面。可以找几个有代表性的来看下生成的系统调用函数：</p><p>比如sendfile是阻塞的系统调用：
+<img alt=sendfile src=/blog/assets/syscall/1545293113_49.png class=myimg></p><p>比如settimeofday是非阻塞的系统调用：
+<img alt=gettimeofday src=/blog/assets/syscall/1545293136_67.png class=myimg></p><p>epoll相关的epollwait也是阻塞的，但是网络socket fd在go里面都统一设置为了nonblocking fd处理了，因此并不会阻塞。
+<img alt=image-20181211095200708 src=/blog/assets/syscall/image-20181211095200708-4493120.png class=myimg></p><h2 id=12-开始分析源码>1.2 开始分析源码 <a href=#12-%e5%bc%80%e5%a7%8b%e5%88%86%e6%9e%90%e6%ba%90%e7%a0%81 class=anchor aria-hidden=true>#</a><a href=#12-开始分析源码 class=anchor aria-hidden=true>#</a></h2><p>在讲述系统调用发生的协程调度之前，让我们看看go是如何进入系统调用的，理解了这个让我们不会对后面所说的一些东西感到很陌生。</p><p>golang对操作系统的系统调用作了封装，提供了syscall这样的库让我们执行系统调用。例如，Read系统调用实现如下：</p><pre><code class=language-go>func Read(fd int, p []byte) (n int, err error) {
+    n, err = read(fd, p)
+    if raceenabled {
+        if n &gt; 0 {
+            ......
+        }
+        ......
+    }
+    return
+}
+
+// 最终封装了Syscall
+func read(fd int, p []byte) (n int, err error) {
+    var _p0 unsafe.Pointer
+    if len(p) &gt; 0 {
+        _p0 = unsafe.Pointer(&amp;p[0])
+    } else {
+        _p0 = unsafe.Pointer(&amp;_zero)
+    }
+
+    r0, _, e1 := Syscall(SYS_READ, uintptr(fd), uintptr(_p0), uintptr(len(p)))
+    n = int(r0)
+    if e1 != 0 {
+        err = e1
+    }
+    return
+}
+
+// 我们只关心进入系统调用时调用的runtime·entersyscall
+// 和退出时调用的runtime·exitsyscall
+TEXT    ·Syscall(SB),NOSPLIT,$0-56
+    CALL    runtime·entersyscall(SB)
+    MOVQ 16(SP), DI
+    MOVQ 24(SP), SI
+    MOVQ 32(SP), DX
+    MOVQ $0, R10 s
+    MOVQ $0, R8
+    MOVQ $0, R9
+    MOVQ 8(SP), AX   // syscall entry
+    SYSCALL
+    CMPQ    AX, $0xfffffffffffff001
+    JLS ok
+
+    MOVQ    $-1, 40(SP) // r1
+    MOVQ $0, 48(SP)  // r2
+    NEGQ    AX
+    MOVQ AX, 56(SP)  // errno
+
+    CALL    runtime·exitsyscall(SB)
+    RET
+</code></pre><p>我们并不关心系统调用到底怎么实现。我们只关心系统调用过程与调度器相关内容，因为Golang自己接管系统调用，调度器便可以在进出系统调用时做一些你所不明白的优化，这里我要带你弄清楚调度器怎么做优化的。</p><h2 id=13-进入系统调用前>1.3 进入系统调用前 <a href=#13-%e8%bf%9b%e5%85%a5%e7%b3%bb%e7%bb%9f%e8%b0%83%e7%94%a8%e5%89%8d class=anchor aria-hidden=true>#</a><a href=#13-进入系统调用前 class=anchor aria-hidden=true>#</a></h2><p>我们前面说过，系统调用是一个相对耗时的过程。一旦P中的某个G进入系统调用状态而阻塞了该P内的其他协程。此时调度器必须得做点什么吧，这就是调度器在进入系统调用前call runtime·entersyscall目的所在。</p><blockquote><p>关于调度粘性（亲和性）问题，这里提一嘴：</p><p>下文描述的时候有点偏故事性，关于GMP三者之间的关系，请务必注意goroutine、thread调度亲和性问题，这样就比较容易理解为什么G想再原来的M上执行，而M又想在原来的P上执行。</p><p>p上有mcache、gFree，m上有tls，m运行g申请小于32K的内存是从p.mcache中分配，维持g、m、p之间的关系有助于复用之前p上建立的mcache，也有助于m创建新的g时复用p上之前维护的空闲g列表。</p><p>当然可能还有一些其他的原因，这里暂时先不展开了 see：https://sourcegraph.com/github.com/golang/go/-/blob/src/runtime/runtime2.go#L613。</p></blockquote><p>OK，我们继续讲运行时对系统调用的处理。</p><pre><code class=language-go>void
+·entersyscall(int32 dummy)
+{
+    runtime·reentersyscall((uintptr)runtime·getcallerpc(&amp;dummy), runtime·getcallersp(&amp;dummy));
+}
+
+void
+runtime·reentersyscall(uintptr pc, uintptr sp)
+{
+    void (*fn)(void);
+
+    // 为什么g-&gt;m-&gt;locks++?
+    g-&gt;m-&gt;locks++;
+
+    g-&gt;stackguard0 = StackPreempt;
+    g-&gt;throwsplit = 1;
+
+    // Leave SP around for GC and traceback.
+    // save()到底在save什么？
+    save(pc, sp);
+    g-&gt;syscallsp = sp;
+    g-&gt;syscallpc = pc;
+
+    runtime·casgstatus(g, Grunning, Gsyscall);
+
+    // 这些堆栈之间到底是什么关系？
+    if(g-&gt;syscallsp &lt; g-&gt;stack.lo || g-&gt;stack.hi &lt; g-&gt;syscallsp)
+    {
+        fn = entersyscall_bad;
+        runtime·onM(&amp;fn);
+    }
+
+    // 这个还不知道是啥意思
+    if(runtime·atomicload(&amp;runtime·sched.sysmonwait)) {
+        fn = entersyscall_sysmon;
+        runtime·onM(&amp;fn);
+        save(pc, sp);
+    }
+
+    // 这里很关键：P的M已经陷入系统调用，于是P忍痛放弃该M
+    // 但是请注意：此时M还指向P，在M从系统调用返回后还能找到P
+    g-&gt;m-&gt;mcache = nil;
+
+    g-&gt;m-&gt;p-&gt;m = nil;
+    // P的状态变为Psyscall
+    runtime·atomicstore(&amp;g-&gt;m-&gt;p-&gt;status, Psyscall);
+
+    if(runtime·sched.gcwaiting) {
+        fn = entersyscall_gcwait;
+        runtime·onM(&amp;fn);
+        save(pc, sp);
+    }
+    g-&gt;stackguard0 = StackPreempt;
+    g-&gt;m-&gt;locks--;
+}
+</code></pre><p>上面与调度器相关的内容其实就是将M从P剥离出去，告诉调度器，我已经放弃M了，我不能饿着我的孩子们（G）。但是M内心还是记着P的，在系统调用返回后，M还尽量找回原来的P，至于P是不是另结新欢就得看情况了。</p><p>注意这时候P放弃了前妻M，但是还没有给孩子们找后妈（M），只是将P的状态标记为PSyscall，那么什么时候以及怎么样给孩子们找后妈呢？我们在后面详细阐述。</p><h2 id=14-从系统调用返回后>1.4 从系统调用返回后 <a href=#14-%e4%bb%8e%e7%b3%bb%e7%bb%9f%e8%b0%83%e7%94%a8%e8%bf%94%e5%9b%9e%e5%90%8e class=anchor aria-hidden=true>#</a><a href=#14-从系统调用返回后 class=anchor aria-hidden=true>#</a></h2><p>从系统调用返回后，也要告诉调度器，因为需要调度器做一些事情，根据前面系统调用的实现，具体实现是：</p><pre><code class=language-go>void
+·exitsyscall(int32 dummy)
+{
+    void (*fn)(G*);
+
+    // 这个g到底是什么？
+    g-&gt;m-&gt;locks++;  // see comment in entersyscall
+
+    if(runtime·getcallersp(&amp;dummy) &gt; g-&gt;syscallsp)
+        runtime·throw(&quot;exitsyscall: syscall frame is no longer valid&quot;);
+
+    g-&gt;waitsince = 0;
+    // 判断能否快速找到归属
+    if(exitsyscallfast()) {
+        g-&gt;m-&gt;p-&gt;syscalltick++;
+
+        // g的状态从syscall变成running，继续欢快地跑着
+        runtime·casgstatus(g, Gsyscall, Grunning);
+
+        g-&gt;syscallsp = (uintptr)nil;
+        g-&gt;m-&gt;locks--;
+        if(g-&gt;preempt) {
+            g-&gt;stackguard0 = StackPreempt;
+        } else {
+            g-&gt;stackguard0 = g-&gt;stack.lo + StackGuard;
+        }
+        g-&gt;throwsplit = 0;
+        return;
+    }
+    g-&gt;m-&gt;locks--;
+
+    // Call the scheduler.
+    // 如果M回来发现P已经有别人服务了，那只能将自己挂起
+    // 等着服务别人。
+    fn = exitsyscall0;
+    runtime·mcall(&amp;fn);
+    ......
+}
+
+static bool
+exitsyscallfast(void)
+{
+    void (*fn)(void);
+    if(runtime·sched.stopwait) {
+        g-&gt;m-&gt;p = nil;
+        return false;
+    }
+
+    // 如果之前附属的P尚未被其他M,尝试绑定该P
+    if(g-&gt;m-&gt;p &amp;&amp; g-&gt;m-&gt;p-&gt;status == Psyscall &amp;&amp; runtime·cas(&amp;g-&gt;m-&gt;p-&gt;status, Psyscall, Prunning)) {
+        g-&gt;m-&gt;mcache = g-&gt;m-&gt;p-&gt;mcache;
+        g-&gt;m-&gt;p-&gt;m = g-&gt;m;
+        return true;
+    }
+
+    // Try to get any other idle P.
+    // 否则从空闲P列表中随便捞一个出来
+    g-&gt;m-&gt;p = nil;
+
+    if(runtime·sched.pidle) {
+        fn = exitsyscallfast_pidle;
+        runtime·onM(&amp;fn);
+        if(g-&gt;m-&gt;scalararg[0]) {
+            g-&gt;m-&gt;scalararg[0] = 0;
+            return true;
+        }
+    }
+    return false;
+}
+</code></pre><p>G从系统调用返回的过程，其实就是失足妇女找男人的逻辑：</p><ol><li>首先看看能否回到当初爱人(P)的怀抱：找到当初被我抛弃的男人，我这里还存着它的名片(m->p)，家庭住址什么的我都还知道；</li><li>如果爱人受不了寂寞和抚养孩子的压力已经变节（P的状态不再是Psyscall），那我就随便找个单身待解救男人从了也行；</li><li>如果上面的1、2都找不到，那也没办法，男人都死绝了，老娘只好另想他法。</li></ol><p>以上过程1和2其实就是exitsyscallfast()的主要流程，用怀孕了的失足妇女找男人再合适不过。 一个女人由于年轻不懂事失足，抛家弃子（家是P，子是P的G）。当浪子回头后，意欲寻回从前的夫君，只能有两种可能：</p><ul><li>等了很久已然心灰意冷的夫君在家人的安排下另娶他人；</li><li>痴情的夫君已然和嗷嗷待哺的孩子们依然在等待她的归回。</li></ul><p>当然第二种的结局比较圆满，这个女人从此死心塌地守着这个家，于是p->m又回来了，孩子们(g)又可以继续活下去了。 第一种就比较难办了，女人（m）心灰意冷，将产下的儿子（陷入系统调用的g）交于他人（全局g的运行队列）抚养，远走他乡，从此接收命运的安排（参与调度，以后可能服务于别的p）。 对于第二种可能性，只能说女人的命运比较悲惨了：</p><pre><code class=language-go>static void
+exitsyscall0(G *gp)
+{
+    P *p;
+    runtime·casgstatus(gp, Gsyscall, Grunnable);
+    dropg();
+    runtime·lock(&amp;runtime·sched.lock);
+    // 这里M再次尝试为自己找个归宿P
+
+    p = pidleget();
+    // 如果没找到P，M讲自己放入全局的运行队列中
+    // 同时将它的g放置到全局的P queue中进去，自己不管了
+    if(p == nil)
+        globrunqput(gp);
+    else if(runtime·atomicload(&amp;runtime·sched.sysmonwait)) {
+        runtime·atomicstore(&amp;runtime·sched.sysmonwait, 0);
+        runtime·notewakeup(&amp;runtime·sched.sysmonnote);
+    }
+    runtime·unlock(&amp;runtime·sched.lock);
+    // 如果找到了P，占有P并且开始执行P内的g，永不回头
+    if(p) {
+        acquirep(p);
+        execute(gp);  // Never returns.
+    }
+
+    if(g-&gt;m-&gt;lockedg) {
+        // Wait until another thread schedules gp and so m again.
+        stoplockedm();
+        execute(gp);  // Never returns.
+    }
+    // 找了一圈还是没找到，释放掉M当前执行环境，M不再做事
+    // stopm会暂停当前M直到其找到了可运行的P为止
+    // 找到以后进入schedule，执行P内的g
+    stopm();
+
+    // m从stopm()中返回以后，说明该m被绑定至某个P,可以开始
+    // 继续欢快地跑了,此时就需要调度找到一个g去执行
+    // 这就是调用schedule的目的所在
+    schedule();  // Never returns.
+}
+</code></pre><p>话说到这里，其实这个M当前没有运行的价值了（无法找到p运行它），那么我们就将她挂起，直到被其他人唤醒。 m被挂起调用的函数是stopm()</p><pre><code class=language-go>// Stops execution of the current m until new work is available.
+// Returns with acquired P.
+static void stopm(void)
+{
+    if(g-&gt;m-&gt;locks)
+        runtime·throw(&quot;stopm holding locks&quot;);
+    if(g-&gt;m-&gt;p)
+        runtime·throw(&quot;stopm holding p&quot;);
+
+    if(g-&gt;m-&gt;spinning) {
+        g-&gt;m-&gt;spinning = false;
+        runtime·xadd(&amp;runtime·sched.nmspinning, -1);
+    }
+retry:
+    runtime·lock(&amp;runtime·sched.lock);
+    // 将m插入到空闲m队列中，统一管理
+    mput(g-&gt;m);
+    runtime·unlock(&amp;runtime·sched.lock);
+
+    // 在这里被挂起，阻塞在m-&gt;park上，位于lock_futex.go
+    runtime·notesleep(&amp;g-&gt;m-&gt;park);
+
+    // 从挂起被唤醒后开始执行
+    runtime·noteclear(&amp;g-&gt;m-&gt;park);
+    if(g-&gt;m-&gt;helpgc) {
+        runtime·gchelper();
+        g-&gt;m-&gt;helpgc = 0;
+        g-&gt;m-&gt;mcache = nil;
+        goto retry;
+    }
+
+    // m-&gt;nextp是什么？
+    acquirep(g-&gt;m-&gt;nextp);
+    g-&gt;m-&gt;nextp = nil;
+}
+</code></pre><p>那么说到这里，其实很多事情都一目了然，当一个M从系统调用返回后，通过各种方式想找到可以托付的P(找前夫—>找闲汉)，求之不得最终只能将自己挂起，等待下次系统中有空闲的P的时候被唤醒。</p><h2 id=15-sysmon>1.5 sysmon <a href=#15-sysmon class=anchor aria-hidden=true>#</a><a href=#15-sysmon class=anchor aria-hidden=true>#</a></h2><p>前面我们重点讲了一个m是如何陷入系统调用和如何返回的心酸之路。我们忽略了p的感情，因为他才是真正的受害者，它被剥夺了m，从此无人理会它嗷嗷待哺的孩子们(g)，并且状态还被变成了Psyscall，相当于贴上了屌丝标签，别无他法，只能等待陷入系统调用的m返回，再续前缘。 当然，这样做是不合理的，因为如果m进入系统调用后乐不思蜀，那P的孩子们都得饿死，这在现实社会中可以发生，但在数字世界里是决不允许的。 OK，组织绝对不会忽略这种情况的，于是，保姆（管家）出现了，它就是sysmon线程，这是一个特殊的m，专门监控系统状态。 sysmon周期性醒来，并且遍历所有的p，如果发现有Psyscall状态的p并且已经处于该状态超过一定时间了，那就不管那个负心的前妻，再次p安排一个m，这样p内的任务又可以得到处理了。</p><pre><code class=language-go>func sysmon() {
+    ......
+    retake(now);
+    ......
+}
+
+// 我们只摘取了sysmon中与P处理相关的代码分析：
+static uint32
+retake(int64 now)
+{
+    uint32 i, s, n;
+    int64 t;
+    P *p;
+    Pdesc *pd;
+
+    n = 0;
+    // 遍历所有的P，根据其状态作相应处理，我们只关注Psyscall
+    for(i = 0; i &lt; runtime·gomaxprocs; i++) {
+        p = runtime·allp[i];
+        if(p==nil)
+            continue;
+        pd = &amp;pdesc[i];
+        s = p-&gt;status;
+        if(s == Psyscall) {
+            t = p-&gt;syscalltick;
+            if(pd-&gt;syscalltick != t) {
+                pd-&gt;syscalltick = t;
+                pd-&gt;syscallwhen = now;
+                continue;
+            }
+            if(p-&gt;runqhead == p-&gt;runqtail &amp;&amp; runtime·atomicload(&amp;runtime·sched.nmspinning) + runtime·atomicload(&amp;runtime·sched.npidle) &gt; 0 &amp;&amp;
+                pd-&gt;syscallwhen + 10*1000*1000 &gt; now)
+                continue;
+            incidlelocked(-1);
+
+            // 因为需要将P重新安排m，所以状态转化为Pidle
+            if(runtime·cas(&amp;p-&gt;status, s, Pidle)) {
+                n++;
+                handoffp(p);
+            }
+           incidlelocked(1);
+   ......
+}
+</code></pre><p>找到了处于Psyscall状态的P后，继续判断它等待的时间是否已经太长，如果是这样，就准备抛弃原来的还陷入syscall的m，调用handoff(p)，开始为p准备新生活。</p><p>我们接下来仔细分析下p是怎么过上新生活的，handoffp无非就是找一个新的m，将m与该p绑定，接下来将由m继续执行该p内的g。</p><p>handoffp()找到的新的m可能是别人以前的m(私生活好混乱)。由于这里获得的m是处于idle状态，处于wait状态（在stopm()中被sleep的），在这里，handoffp中会通过startm()来唤醒它，一个常见逻辑就是这个p里面还有g要执行那么就直接startm，这里的startm会通过mget获取一个空闲的m（如stopm暂停的m），获取不到就通过newm()创建一个m。</p><p>这里的startm以被唤醒的m为例继续说明，关于新创建的m被唤醒的m继续执行它被阻塞的下一条语句：</p><pre><code class=language-go>stopm()
+{
+    ......
+    // 从挂起被唤醒后开始执行
+    runtime·noteclear(&amp;g-&gt;m-&gt;park);
+    if(g-&gt;m-&gt;helpgc) {
+        runtime·gchelper();
+        g-&gt;m-&gt;helpgc = 0;
+        g-&gt;m-&gt;mcache = nil;
+       goto retry;
+    }
+
+     // 将M和P绑定
+    acquirep(g-&gt;m-&gt;nextp);
+    g-&gt;m-&gt;nextp = nil;
+}
+
+// 由于m在sleep前的调用路径是exitsyscall0() –&gt; stopm()，从stopm()中返回至exitsyscall0后，执行接下来的语句
+func exitsyscall0(gp *g) {
+    _g_ := getg()
+    ......
+    stopm()
+    // m继续run起来后，执行一次schedule
+    // 找到m-&gt;p里面可运行的g并执行
+    schedule() // Never returns.
+}
+
+// One round of scheduler: find a runnable goroutine and execute it.
+// Never returns.
+func schedule() {
+    _g_ := getg()
+    ......
+    if gp == nil {
+        gp, inheritTime = runqget(_g_.m.p.ptr())
+        if gp != nil &amp;&amp; _g_.m.spinning {
+            throw(&quot;schedule: spinning with local work&quot;)
+        }
+    }
+    if gp == nil {
+        gp, inheritTime = findrunnable()
+        resetspinning()
+    }
+
+    if gp.lockedm != nil {
+        // Hands off own p to the locked m,
+        // then blocks waiting for a new p.
+       startlockedm(gp)
+       goto top
+    }
+
+    // 执行该gp
+    execute(gp, inheritTime)
+}
+</code></pre><h2 id=16-总结>1.6 总结 <a href=#16-%e6%80%bb%e7%bb%93 class=anchor aria-hidden=true>#</a><a href=#16-总结 class=anchor aria-hidden=true>#</a></h2><p>本文介绍了go对系统调用的大致处理过程，感谢知乎网友<a href=https://www.zhihu.com/people/ding-kai-54/activities>丁凯</a>在知乎的分享，结合个人理解，略作整理也分享给大家。</p><div class=edit-page><a href=https://github.com/hitzhangjie/myspace/blob/master/content/blog/2021-06-06-how%20go%20handles%20syscall.md><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentcolor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-edit-2"><path d="M17 3a2.828 2.828.0 114 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>Edit this page on GitHub</a></div><div class="docs-navigation d-flex justify-content-between"><a href=/blog/2021-06-15-go-map%E8%AE%BE%E8%AE%A1%E5%AE%9E%E7%8E%B0%E5%8F%8A%E5%BA%94%E7%94%A8%E9%80%89%E5%9E%8B/><div class="card my-1"><div class="card-body py-2">&larr; go map设计实现及应用选型</div></div></a><a class=ms-auto href=/blog/2021-05-25-go%E6%8A%A2%E5%8D%A0%E5%BC%8F%E8%B0%83%E5%BA%A6/><div class="card my-1"><div class="card-body py-2">go抢占式调度 &rarr;</div></div></a></div></main></div></div></div><footer class="footer text-muted"><div class=container-xxl><div class=row><div class="col-lg-8 order-last order-lg-first"><ul class=list-inline><li class=list-inline-item>Powered by <a class=text-muted href=https://www.netlify.com/>Netlify</a>, <a class=text-muted href=https://gohugo.io/>Hugo</a>, and <a class=text-muted href=https://getdoks.org/>Doks</a></li></ul></div><div class="col-lg-8 order-first order-lg-last text-lg-end"><ul class=list-inline></ul></div><div class=col-lg-8 align=right><p><font size=-1>站点构建版本：v</font></p></div></div></div></footer><script src=/js/bootstrap.min.fdbe9b9ba88a036135318f3c721784d684ac9e3280fe282cc80d7d49f7f9c82780cd54228c1608685a230c09984300d7946fc471734d566fcebc148b65bd16db.js integrity="sha512-/b6bm6iKA2E1MY88cheE1oSsnjKA/igsyA19Sff5yCeAzVQijBYIaFojDAmYQwDXlG/EcXNNVm/OvBSLZb0W2w==" crossorigin=anonymous defer></script>
+<script src=/js/highlight.min.451fe6185924dcedf55c767559b5130f666f31c989f0078a75bafc346ad7364e180edfd731b1ca6bae0e90dfee88842885d284126ab0879f5067399e3a02b09e.js integrity="sha512-RR/mGFkk3O31XHZ1WbUTD2ZvMcmJ8AeKdbr8NGrXNk4YDt/XMbHKa64OkN/uiIQohdKEEmqwh59QZzmeOgKwng==" crossorigin=anonymous defer></script>
+<script src=/main.min.f16ffd9b364013a1df84be9cd7a45c470cb48639766bf5551e05bba845fe4ab150cb6436de43609bfed9af47c23bd5e395e9a10b932fa6fb2c4ee8f6cc78d7a3.js integrity="sha512-8W/9mzZAE6HfhL6c16RcRwy0hjl2a/VVHgW7qEX+SrFQy2Q23kNgm/7Zr0fCO9XjlemhC5MvpvssTuj2zHjXow==" crossorigin=anonymous defer></script>
+<script src=/index.min.4f5da6d5d5039814b7640914dc6d7af9b1826b54a2e8027123e345920f33e3dab6f98ed3b275444c8e3ce3de9faa12475d34fad04a0140d0a99b28e75bc5267c.js integrity="sha512-T12m1dUDmBS3ZAkU3G16+bGCa1Si6AJxI+NFkg8z49q2+Y7TsnVETI48496fqhJHXTT60EoBQNCpmyjnW8UmfA==" crossorigin=anonymous defer></script></body></html>

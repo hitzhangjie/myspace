@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>isolation on</title><link>/tags/isolation/</link><description>Recent content in isolation on</description><generator>Hugo -- gohugo.io</generator><language>en-US</language><lastBuildDate>Tue, 27 Apr 2021 12:34:00 +0800</lastBuildDate><atom:link href="/tags/isolation/index.xml" rel="self" type="application/rss+xml"/><item><title>09普通索引和唯一索引：如何选择</title><link>/blog/09%E6%99%AE%E9%80%9A%E7%B4%A2%E5%BC%95%E5%92%8C%E5%94%AF%E4%B8%80%E7%B4%A2%E5%BC%95%E5%A6%82%E4%BD%95%E9%80%89%E6%8B%A9/</link><pubDate>Tue, 27 Apr 2021 12:34:00 +0800</pubDate><guid>/blog/09%E6%99%AE%E9%80%9A%E7%B4%A2%E5%BC%95%E5%92%8C%E5%94%AF%E4%B8%80%E7%B4%A2%E5%BC%95%E5%A6%82%E4%BD%95%E9%80%89%E6%8B%A9/</guid><description>对比两种类型的索引 # 普通索引，允许多条记录中组成索引的字段值出现重复的情况； 唯一索引，不允许…… 两种类型索引实现 # 肯定都是一样的啊
+两种类型索引效率 # 我们以表user为例：
+create table `user` ( id int auto_increment, id_card varchar(64), name varchar(32), primary key(id), [uique|index] (id_card) -- 创建索引：唯一索引或者普通索引 ) 其中id_card可能是唯一索引，也可能是普通索引。
+查询效率 # 以这条查询语句为例：select name from user where id_card=?
+普通索引的查询
+顺着B+树根据id_card查询，查询到第一条记录之后，回表查询对应的name，加入结果集。继续遍历向右的指针对应的记录，直到找到第一条id_card不匹配的记录为止。因为id_card肯定是不重复的，所以这里向右的匹配开销顶多也就是多比较一次。
+当然如果匹配到的这条记录如果是page的最后一条记录的话，那么可能向右的查找需要加载另一个page，这是最坏的情况了。
+实际情况是B+树种一个节点可以存储非常多的key和指针，真的出现匹配记录出现在最后一个的情况非常少。
+唯一索引的查询
+查找过程也是顺着B+树根据id_card查询，然后再回表。区别是它找到第一个匹配的节点之后就停止向右的查找了，因为它知道是唯一索引，不可能有重复的记录存在。
+性能对比
+看上去唯一索引查询性能会高一点，但是前面也分析了id_card本身具备唯一性，普通查询中这种继续向右查找的操作对性能影响开销并不大，微乎其微。所以对于这两种索引，建议使用普通索引来代替唯一索引。
+更新效率 # 更新语句以这个为例：update user set name=&amp;quot;xxxx&amp;quot; where id_card=?
+change buffer
+在mysql执行数据更新时，会先写redo log，然后收到ok后准备更新数据。这个要更新的行对应的页数据如果在内存中，则直接更新内内存中的相应字段就可以了。</description></item><item><title>08事务隔离：事务到底是隔离的还是不隔离的</title><link>/blog/08%E4%BA%8B%E5%8A%A1%E9%9A%94%E7%A6%BB%E4%BA%8B%E5%8A%A1%E5%88%B0%E5%BA%95%E6%98%AF%E9%9A%94%E7%A6%BB%E7%9A%84%E8%BF%98%E6%98%AF%E4%B8%8D%E9%9A%94%E7%A6%BB%E7%9A%84/</link><pubDate>Sun, 25 Apr 2021 22:30:00 +0800</pubDate><guid>/blog/08%E4%BA%8B%E5%8A%A1%E9%9A%94%E7%A6%BB%E4%BA%8B%E5%8A%A1%E5%88%B0%E5%BA%95%E6%98%AF%E9%9A%94%E7%A6%BB%E7%9A%84%E8%BF%98%E6%98%AF%E4%B8%8D%E9%9A%94%E7%A6%BB%E7%9A%84/</guid><description>启动事务 # 启动事务的方式有哪些：
+autocommit=1，每条语句是一个独立的事务，比如select、update、delete； 通过begin/start transaction来启动一个事务，但是该语句并不是事务的起点，起点是在后面的第一条sql语句执行的时候； start transaction with consistent snapshot，立即启动一个新的事务，和begin/start transaction不同，该语句是一个事务的起点； 视图的概念 # 在mysql里，视图，有两种意思：
+一个是“view”，它是一个用查询语句定义的虚拟表，如执行create view select * from table，该语句执行的时候执行查询语句获得结果并创建视图，可以在视图上执行查询操作，查询语法与在表上的查询方式类似；
+另一个是InnoDB在实现MVCC时用到的“一致性读视图”，即consistent read view，用于支持RC（read commited，读提交）和RR（repeatable read，可重复读）隔离级别的实现；
+它没有物理结构，作用是事务执行期间用来定义“当前事务能看到什么数据”。
+“快照”在MVCC里是怎么工作的 # 在可重复读隔离级别下，事务在启动的时候就“创建了个快照”，这个快照是基于整库的。
+但是这里的创建快照，并不是复制一份完整的数据作为只读，肯定不能这样实现，想想一下一个数据库如果数量很大，复制的存储开销也太大了。
+mysql MVCC里实现的这个快照非常聪明：
+InnoDB里每个事务都有一个唯一的事务ID，叫transaction id。它是在事务开始的时候向InnoDB的事务系统申请的，是按申请顺序严格递增的。
+每行数据也是有多个版本的，这里的版本就用transaction id来表示。哪个数据版本更加新一点旧一点，还是根据生成该版本时的顺序来决定的，每行数据的transaction id则用来维护一个一致性读视图；
+当对某行数据进行更新操作时，会申请一个新的事务id，并插入新行数据，并更新字段trx_id为事务id，此时，插入了新的数据并不会删除旧的，旧的还是保存着的。但是新版的行数据有办法能找到旧版本的数据；
+注意新生成一个版本数据时，也会插入一行undo log，一个事务可以借助其事务id，从当前数据版本开始读，然后结合每行数据的trx_id和undo log，来读取到当前事务可见的数据版本，来实现一致性读视图，也就实现了可重复读；
+就是当前事务id可能是100，现在对应行的数据当前版本是102，100这个事务就顺着数据行的当前版本开始找，直到发现一个版本&amp;lt;=100时才行，也就保证了一致性读，这里就是根据数据行102版本的undo log找到前一条数据行，重复这个过程，直到发现一个版本&amp;lt;=100。
+通过这种方式，实现了秒级快照的能力！
+当前读（current read） # 如果事务中涉及到一些更新类的操作的话，这里的更新是在数据“最新版本”上进行的更新，也就是说在“当前读”的版本上进行更新。后续的读，看上去读取到的就是最新值。
+这可能会让我们觉得，与我们之前MVCC里面一致性读时说的一些有矛盾。其实没有矛盾的，只是更新操作的时候是在当前读的最新数据上进行更新。而后续读取的时候依然是按照MVCC里一致性读的方式来的。
+如果更新时不是按照当前读来更新，那么就会造成以前已经提交的事务更新操作丢失了。
+有几种办法可以实现当前读：
+更新操作肯定是当前读了； select + lock in share mod，也是当前读； select + for update，也是当前读；</description></item></channel></rss>

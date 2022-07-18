@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>alignment on</title><link>/tags/alignment/</link><description>Recent content in alignment on</description><generator>Hugo -- gohugo.io</generator><language>en-US</language><lastBuildDate>Sun, 26 Jun 2022 23:57:00 +0800</lastBuildDate><atom:link href="/tags/alignment/index.xml" rel="self" type="application/rss+xml"/><item><title>为什么需要内存对齐，以及如何控制对齐</title><link>/blog/%E5%86%85%E5%AD%98%E5%AF%B9%E9%BD%90/</link><pubDate>Sun, 26 Jun 2022 23:57:00 +0800</pubDate><guid>/blog/%E5%86%85%E5%AD%98%E5%AF%B9%E9%BD%90/</guid><description>什么是内存对齐？ # 所谓的内存对齐，指的是我们的一些数据在内存中组织的时候，为了后续访问时效率更高，需要将其起始地址进行一定的对齐处理，最常见的就是将结构体各个成员起始地址分别对齐，非结构体比如一个普通的int数也会对齐处理的。
+举个int数的例子：
+int n = 100; printf(&amp;quot;n: %d\n&amp;quot;, n); printf(&amp;quot;sizeof(int): %lu, address: %p\n&amp;quot;, sizeof(n), &amp;amp;n); 运行后发现n的大小是4字节，地址是0x16d216c4c，hex &amp;lsquo;c&amp;rsquo;对应二进制数为1100，低位是00，00表示是4字节对齐的，那这个int数在内存中组织就是4字节对齐的。
+再看个struct结构体：
+typedef struct { char sex; int age; } Person; Person p; printf(&amp;quot;sizeof(person): %lu\n&amp;quot;, sizeof(p)); printf(&amp;quot;person.sex address: %p\n&amp;quot;, &amp;amp;p.sex); printf(&amp;quot;person.age address: %p\n&amp;quot;, &amp;amp;p.age); 运行后发现p的大小是8个字节，我们书本上学习过，sex放在地址0，age放在地址4处，sex后有3个padding char，这样整个是8个字节。然后我们继续看下地址:
+person address: 0x16fdbac44 person.sex address: 0x16fdbac44 person.age address: 0x16fdbac48 struct的首地址跟第一个成员的首地址是相同的，低位的44表示01000100，说明这个结构体本身以及内部成员sex都是4字节对齐的，然后age地址低位是01001000，在0x16fdbac44+4=0x16fdbac48，其实是4字节对齐的。这么看下来这个结构体中各个字段都是4字节对齐的。在sex和age之间padding了3个char。
+这就是内存对齐了，至少直观地知道是什么了。
+简单地说，当我们希望读取的数据字节数是N，该数据起始地址是addr，假设 addr % N == 0 就是aligned access，反之就是unaligned access。
+即便是基本类型也会对齐，对于结构体各个field都会对齐，当我们说一个struct是多少字节对齐时，指的是struct中field对齐用的字节数最大的一个。 不妨了解下go语言中的内存对齐规则，see: https://go.</description></item></channel></rss>

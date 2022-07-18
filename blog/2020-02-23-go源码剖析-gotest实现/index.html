@@ -1,0 +1,146 @@
+<!doctype html><html lang=en-us><head><meta charset=utf-8><meta http-equiv=x-ua-compatible content="ie=edge"><meta name=viewport content="width=device-width,initial-scale=1,shrink-to-fit=no"><link rel=preload as=font href=/fonts/vendor/jost/jost-v4-latin-regular.woff2 type=font/woff2 crossorigin><link rel=preload as=font href=/fonts/vendor/jost/jost-v4-latin-500.woff2 type=font/woff2 crossorigin><link rel=preload as=font href=/fonts/vendor/jost/jost-v4-latin-700.woff2 type=font/woff2 crossorigin><link rel=stylesheet href=/main.63b6b8ff933309fcc94a30e21d69932290c8643fa1a32893f5681778c776ed3e51c237a1acd00b42426b3bf780c351b4a6ce75b3b659915ef0dd610b2e027a8c.css integrity="sha512-Y7a4/5MzCfzJSjDiHWmTIpDIZD+hoyiT9WgXeMd27T5RwjehrNALQkJrO/eAw1G0ps51s7ZZkV7w3WELLgJ6jA==" crossorigin=anonymous><noscript><style>img.lazyload{display:none}</style></noscript><meta name=robots content="index, follow"><meta name=googlebot content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1"><meta name=bingbot content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1"><title>go源码剖析-gotest实现 - MySpace</title><meta name=description content="问题背景 # 在go1.13出来后不久，有不少同学遇到了go test报错的问题 “flag -test.timeout provided but not defined”。这个问题是如何引起的呢？
+ 公司微服务代码，通常是借助代码生成工具统一生成的，包括针对接口的测试用例； 在生成单元测试文件时，如helloworld_test.go中，在该文件中定义了一些测试选项如-timeout、-service、-method、-target、-req、-rsp等； 上述定义的选项，在helloworld_test.go中的func init()中执行flag.Parse()操作完成选项解析。  这是被测试代码的一点背景信息，上述测试代码在go1.12中是没有问题的，但是当升级到go1.13后，就出现了上述“flag &amp;hellip; provided but not defined”的错误。
+实现细节 # go test实现细节，需要跟踪一下命令go test的执行过程，具体对应这个源文件：src/cmd/go/internal/test/test.go。
+假如现在，我们创建一个package名为xxxx的go文件，然后创建一个package名为xxxx_test的_test文件，如：
+file: helloworld_test.go
+package xxxx_test import &amp;quot;testing&amp;quot; import &amp;quot;xxxx&amp;quot; func TestHelloWorld(t *testing.T) { xxxx.Hello() } /* func init() { flag.Parse() } */ /* func TestMain(m *testing.M) { os.Exit(m.Run()) } */  file: helloworld.go
+package xxxx func Hello() { }  这里的实例代码，做了适当的简化，方便大家查看。为了更好地跟踪go test过程，我们可以以调试模式运行go test，如GOTMPDIR=$(pwd)/xxx dlv exec $(which go) -- test -c："><link rel=canonical href=/blog/2020-02-23-go%E6%BA%90%E7%A0%81%E5%89%96%E6%9E%90-gotest%E5%AE%9E%E7%8E%B0/><meta property="og:locale" content="en_US"><meta property="og:type" content="article"><meta property="og:title" content="go源码剖析-gotest实现"><meta property="og:description" content="问题背景 # 在go1.13出来后不久，有不少同学遇到了go test报错的问题 “flag -test.timeout provided but not defined”。这个问题是如何引起的呢？
+ 公司微服务代码，通常是借助代码生成工具统一生成的，包括针对接口的测试用例； 在生成单元测试文件时，如helloworld_test.go中，在该文件中定义了一些测试选项如-timeout、-service、-method、-target、-req、-rsp等； 上述定义的选项，在helloworld_test.go中的func init()中执行flag.Parse()操作完成选项解析。  这是被测试代码的一点背景信息，上述测试代码在go1.12中是没有问题的，但是当升级到go1.13后，就出现了上述“flag &mldr; provided but not defined”的错误。
+实现细节 # go test实现细节，需要跟踪一下命令go test的执行过程，具体对应这个源文件：src/cmd/go/internal/test/test.go。
+假如现在，我们创建一个package名为xxxx的go文件，然后创建一个package名为xxxx_test的_test文件，如：
+file: helloworld_test.go
+package xxxx_test import &#34;testing&#34; import &#34;xxxx&#34; func TestHelloWorld(t *testing.T) { xxxx.Hello() } /* func init() { flag.Parse() } */ /* func TestMain(m *testing.M) { os.Exit(m.Run()) } */  file: helloworld.go
+package xxxx func Hello() { }  这里的实例代码，做了适当的简化，方便大家查看。为了更好地跟踪go test过程，我们可以以调试模式运行go test，如GOTMPDIR=$(pwd)/xxx dlv exec $(which go) -- test -c："><meta property="og:url" content="/blog/2020-02-23-go%E6%BA%90%E7%A0%81%E5%89%96%E6%9E%90-gotest%E5%AE%9E%E7%8E%B0/"><meta property="og:site_name" content="MySpace"><meta property="article:published_time" content="2020-02-23T16:54:07+08:00"><meta property="article:modified_time" content="2020-02-23T16:54:07+08:00"><meta property="og:image" content="/doks.png"><meta property="og:image:alt" content="MySpace"><meta name=twitter:card content="summary_large_image"><meta name=twitter:site content="@hitzhangjie"><meta name=twitter:creator content="@hitzhangjie"><meta name=twitter:title content="go源码剖析-gotest实现"><meta name=twitter:description content><meta name=twitter:image content="/doks.png"><meta name=twitter:image:alt content="go源码剖析-gotest实现"><script type=application/ld+json>{"@context":"https://schema.org","@graph":[{"@type":"Person","@id":"/#/schema/person/1","name":"","url":"/","sameAs":["https://twitter.com/hitzhangjie","https://www.linkedin.com/in/hitzhangjie/","https://github.com/hitzhangjie"],"image":{"@type":"ImageObject","@id":"/#/schema/image/1","url":"/\u003cnil\u003e","width":null,"height":null,"caption":""}},{"@type":"WebSite","@id":"/#/schema/website/1","url":"/","name":"MySpace","description":"MySpace is a hitzhangjie\u0027s personal space, for blogs, books, journey, thinkings.","publisher":{"@id":"/#/schema/person/1"}},{"@type":"WebPage","@id":"/blog/2020-02-23-go%E6%BA%90%E7%A0%81%E5%89%96%E6%9E%90-gotest%E5%AE%9E%E7%8E%B0/","url":"/blog/2020-02-23-go%E6%BA%90%E7%A0%81%E5%89%96%E6%9E%90-gotest%E5%AE%9E%E7%8E%B0/","name":"go源码剖析-gotest实现","description":"","isPartOf":{"@id":"/#/schema/website/1"},"about":{"@id":"/#/schema/person/1"},"datePublished":"2020-02-23T16:54:07CET","dateModified":"2020-02-23T16:54:07CET","breadcrumb":{"@id":"/blog/2020-02-23-go%E6%BA%90%E7%A0%81%E5%89%96%E6%9E%90-gotest%E5%AE%9E%E7%8E%B0/#/schema/breadcrumb/1"},"primaryImageOfPage":{"@id":"/blog/2020-02-23-go%E6%BA%90%E7%A0%81%E5%89%96%E6%9E%90-gotest%E5%AE%9E%E7%8E%B0/#/schema/image/2"},"inLanguage":"","potentialAction":[{"@type":"ReadAction","target":["/blog/2020-02-23-go%E6%BA%90%E7%A0%81%E5%89%96%E6%9E%90-gotest%E5%AE%9E%E7%8E%B0/"]}]},{"@type":"BreadcrumbList","@id":"/blog/2020-02-23-go%E6%BA%90%E7%A0%81%E5%89%96%E6%9E%90-gotest%E5%AE%9E%E7%8E%B0/#/schema/breadcrumb/1","name":"Breadcrumbs","itemListElement":[{"@type":"ListItem","position":1,"item":{"@type":"WebPage","@id":"/","url":"/","name":"Home"}},{"@type":"ListItem","position":2,"item":{"@id":"/blog2020-02-23-go%E6%BA%90%E7%A0%81%E5%89%96%E6%9E%90-gotest%E5%AE%9E%E7%8E%B0/"}}]},{"@context":"https://schema.org","@graph":[{"@type":"Article","@id":"/#/schema/article/1","headline":"go源码剖析-gotest实现","description":"","isPartOf":{"@id":"/blog/2020-02-23-go%E6%BA%90%E7%A0%81%E5%89%96%E6%9E%90-gotest%E5%AE%9E%E7%8E%B0/"},"mainEntityOfPage":{"@id":"/blog/2020-02-23-go%E6%BA%90%E7%A0%81%E5%89%96%E6%9E%90-gotest%E5%AE%9E%E7%8E%B0/"},"datePublished":"2020-02-23T16:54:07CET","dateModified":"2020-02-23T16:54:07CET","author":{"@id":"/#/schema/person/2"},"publisher":{"@id":"/#/schema/person/1"},"image":{"@id":"/blog/2020-02-23-go%E6%BA%90%E7%A0%81%E5%89%96%E6%9E%90-gotest%E5%AE%9E%E7%8E%B0/#/schema/image/2"}}]},{"@context":"https://schema.org","@graph":[{"@type":"Person","@id":"/#/schema/person/2","name":null,"sameAs":[]}]},{"@context":"https://schema.org","@graph":[{"@type":"ImageObject","@id":"/blog/2020-02-23-go%E6%BA%90%E7%A0%81%E5%89%96%E6%9E%90-gotest%E5%AE%9E%E7%8E%B0/#/schema/image/2","url":"/doks.png","contentUrl":"/doks.png","caption":"go源码剖析-gotest实现"}]}]}</script><meta name=theme-color content="#fff"><link rel=icon href=/favicon.ico sizes=any><link rel=icon type=image/svg+xml href=/favicon.svg><link rel=apple-touch-icon sizes=180x180 href=/apple-touch-icon.png><link rel=icon type=image/png sizes=32x32 href=/favicon-32x32.png><link rel=icon type=image/png sizes=16x16 href=/favicon-16x16.png><link rel=manifest crossorigin=use-credentials href=/site.webmanifest><script type=text/javascript src="https://platform-api.sharethis.com/js/sharethis.js#property=607868a58d7101001829a8df&product=sop" async></script><style>[alt~=sharing]{border:0;box-shadow:none}div#st-1{text-align:unset}div#st-1 .st-btn{height:24px;padding:0 4px}div#st-1 .st-btn>img{top:4.2px}div#st-2 .st-btn{height:24px;padding:0 4px}div#st-2 .st-btn>img{top:4.2px}</style></head><body class="blog single"><div class=sticky-top><div class=header-bar></div><header class="navbar navbar-expand-lg navbar-light doks-navbar"><nav class="container-xxl flex-wrap flex-lg-nowrap" aria-label="Main navigation"><a class="navbar-brand order-0" href=/ aria-label=MySpace>MySpace</a>
+<button class="btn btn-menu order-2 d-block d-lg-none" type=button data-bs-toggle=offcanvas data-bs-target=#offcanvasDoks aria-controls=offcanvasDoks aria-label="Open main menu"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentcolor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-menu"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button><div class="offcanvas offcanvas-end border-0 py-lg-1" tabindex=-1 id=offcanvasDoks data-bs-backdrop=true aria-labelledby=offcanvasDoksLabel><div class="header-bar d-lg-none"></div><div class="offcanvas-header d-lg-none"><h2 class="h5 offcanvas-title ps-2" id=offcanvasDoksLabel><a class=text-dark href=/>MySpace</a></h2><button type=button class="btn-close text-reset me-2" data-bs-dismiss=offcanvas aria-label="Close main menu"></button></div><div class="offcanvas-body p-4 p-lg-0"><ul class="nav flex-column flex-lg-row align-items-lg-center mt-2 mt-lg-0 ms-lg-2 me-lg-auto"><li class=nav-item><a class="nav-link ps-0 py-1 active" href=/blog/>Blog</a></li><li class=nav-item><a class="nav-link ps-0 py-1" href=/books/>Books</a></li><li class=nav-item><a class="nav-link ps-0 py-1" href=/journey/introduction>Journey</a></li></ul><hr class="text-black-50 my-4 d-lg-none"><form class="doks-search position-relative flex-grow-1 ms-lg-auto me-lg-2"><input id=search class="form-control is-search" type=search placeholder="Search docs..." aria-label="Search docs..." autocomplete=off><div id=suggestions class="shadow bg-white rounded d-none"></div></form><hr class="text-black-50 my-4 d-lg-none"><ul class="nav flex-column flex-lg-row"><li class=nav-item><a class="nav-link social-link" href=https://twitter.com/hitzhangjie><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentcolor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-twitter"><path d="M23 3a10.9 10.9.0 01-3.14 1.53 4.48 4.48.0 00-7.86 3v1A10.66 10.66.0 013 4s-4 9 5 13a11.64 11.64.0 01-7 2c9 5 20 0 20-11.5a4.5 4.5.0 00-.08-.83A7.72 7.72.0 0023 3z"/></svg><small class="ms-2 d-lg-none">Twitter</small></a></li><li class=nav-item><a class="nav-link social-link" href=https://github.com/hitzhangjie><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentcolor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-github"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37.0 00-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44.0 0020 4.77 5.07 5.07.0 0019.91 1S18.73.65 16 2.48a13.38 13.38.0 00-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07.0 005 4.77 5.44 5.44.0 003.5 8.55c0 5.42 3.3 6.61 6.44 7A3.37 3.37.0 009 18.13V22"/></svg><small class="ms-2 d-lg-none">GitHub</small></a></li></ul></div></div></nav></header></div><div class="wrap container-xxl" role=document><div class=content><div class="row flex-xl-nowrap"><div class="col-lg-5 col-xl-4 docs-sidebar"><nav class=docs-links aria-label="Main navigation"><h3>Tag List</h3><ol><li><a href=/tags/go/>go</a></li><li><a href=/tags/test/>test</a></li></ol></nav></div><nav class="docs-toc d-none d-xl-block col-xl-3" aria-label="Secondary navigation"><div class=page-links><h3>On this page</h3><nav id=TableOfContents><ul><li><ul><li><a href=#问题背景>问题背景</a></li><li><a href=#实现细节>实现细节</a></li><li><a href=#该问题产生原因>该问题产生原因</a></li><li><a href=#如何规避该问题>如何规避该问题</a></li><li><a href=#区分testing-flags以及自定义flags>区分testing flags以及自定义flags</a></li><li><a href=#再看go-test代码生成>再看go test代码生成</a></li><li><a href=#总结>总结</a></li></ul></li></ul></nav></div></nav><main class="docs-content col-lg-11 col-xl-9"><h1>go源码剖析-gotest实现</h1><div style=display:flex><div>分享:&nbsp;&nbsp;</div><div><div class=sharethis-inline-share-buttons></div></div></div><hr><p class=lead></p><h2 id=问题背景>问题背景 <a href=#%e9%97%ae%e9%a2%98%e8%83%8c%e6%99%af class=anchor aria-hidden=true>#</a><a href=#问题背景 class=anchor aria-hidden=true>#</a></h2><p>在go1.13出来后不久，有不少同学遇到了go test报错的问题 “flag -test.timeout provided but not defined”。这个问题是如何引起的呢？</p><ul><li>公司微服务代码，通常是借助代码生成工具统一生成的，包括针对接口的测试用例；</li><li>在生成单元测试文件时，如helloworld_test.go中，在该文件中定义了一些测试选项如-timeout、-service、-method、-target、-req、-rsp等；
+上述定义的选项，在helloworld_test.go中的func init()中执行flag.Parse()操作完成选项解析。</li></ul><p>这是被测试代码的一点背景信息，上述测试代码在go1.12中是没有问题的，但是当升级到go1.13后，就出现了上述“flag &mldr; provided but not defined”的错误。</p><h2 id=实现细节>实现细节 <a href=#%e5%ae%9e%e7%8e%b0%e7%bb%86%e8%8a%82 class=anchor aria-hidden=true>#</a><a href=#实现细节 class=anchor aria-hidden=true>#</a></h2><p>go test实现细节，需要跟踪一下命令go test的执行过程，具体对应这个源文件：src/cmd/go/internal/test/test.go。</p><p>假如现在，我们创建一个package名为xxxx的go文件，然后创建一个package名为xxxx_test的_test文件，如：</p><p>file: helloworld_test.go</p><pre><code class=language-go>package xxxx_test
+
+import &quot;testing&quot;
+import &quot;xxxx&quot;
+
+func TestHelloWorld(t *testing.T) {
+	xxxx.Hello()
+}
+
+/*
+func init() {
+    flag.Parse()
+}
+*/
+
+/*
+func TestMain(m *testing.M) {
+    os.Exit(m.Run())
+}
+*/
+</code></pre><p>file: helloworld.go</p><pre><code class=language-go>package xxxx
+
+func Hello() {
+}
+</code></pre><p>这里的实例代码，做了适当的简化，方便大家查看。为了更好地跟踪go test过程，我们可以以调试模式运行go test，如<code>GOTMPDIR=$(pwd)/xxx dlv exec $(which go) -- test -c</code>：</p><ul><li>首先指定了临时目录GOTMPDIR为当前目录下的xxx，在执行编译构建过程中的临时文件将生成到该目录下；</li><li>dlv执行的时候，在<code>--</code>后面添加传递给被调试程序的命令行参数，如这里传递给go的参数是<code>test -c</code>；</li></ul><p>此外，我们可以执行<code>fswatch $(pwd)/xxx</code>来跟踪文件系统的变化，从而帮助我们分析go test到底干了什么，这样比较直观，直接看源码，代码量有点多，容易抓不住头绪。</p><p>接下来只需要执行next、next、next步进的形式执行go test的代码逻辑就可以了。过程中，我们看到fswatch输出了如下信息：</p><pre><code class=language-bash>zhangjie@knight test $ fswatch .
+
+/Users/zhangjie/test/test/xxx/go-build3964143485
+/Users/zhangjie/test/test/xxx/go-build3964143485/b001
+/Users/zhangjie/test/test/xxx/go-build3964143485/b001/_testmain.go
+</code></pre><p>此时查看下_testmain.go的文件内容：</p><p>file: _testmain.go</p><pre><code class=language-go>
+// Code generated by 'go test'. DO NOT EDIT.
+
+package main
+
+import (
+	&quot;os&quot;
+
+	&quot;testing&quot;
+	&quot;testing/internal/testdeps&quot;
+
+	_ &quot;xxxx&quot;
+
+	_xtest &quot;xxxx_test&quot;
+)
+
+var tests = []testing.InternalTest{
+	{&quot;TestHelloWorld&quot;, _xtest.TestHelloWorld},
+}
+
+var benchmarks = []testing.InternalBenchmark{
+}
+
+var examples = []testing.InternalExample{
+}
+
+func init() {
+	testdeps.ImportPath = &quot;xxxx&quot;
+}
+
+
+
+func main() {
+
+	m := testing.MainStart(testdeps.TestDeps{}, tests, benchmarks, examples)
+
+	os.Exit(m.Run())
+}
+</code></pre><p>上述文件中包含了一个main函数，是go test -c生成的测试程序的入口函数。</p><ul><li><p>上述文件中，import了我们自己编写的两个package，如<code>import _ "xxxx"</code>，以及<code>import _xtest "xxxx_test"</code>，这两个package的代码就是我们上面给出的，一个Hello函数定义，一个对Hello函数的单元测试，没有什么复杂的。在helloworld_test.go中我们注释掉了两段代码，一个是func init()逻辑，一个是func TestMain()逻辑。我们稍后再说这个。</p></li><li><p>func init()中也没有什么需要关注的。</p></li><li><p>func main中，先执行了一个testing.MainStart(&mldr;)初始化逻辑，这里面赶了什么呢？它执行了一个testing.Init()函数，来初始化go testing这个package中自定义的一些flags，如-test.timeout之类的。主意这些flags的注册逻辑是在所有package的func init()执行之后才发起的。</p></li><li><p>func main中，接着执行了一个os.Exit(m.Run())来执行测试，展开m.Run()能够看到根据-test.run选择性运行测试用例，或执行所有测试用例的逻辑。注意，当我们在测试文件中定义了TestMain方法之后，这里生成的代码就不是os.Exit(m.Run())了，而是_xtest.TestMain(m),这将允许先执行我们自己的测试代码设置逻辑。如在TestMain中执行一些准备测试数据、工作目录、注册命令选项 逻辑。</p></li></ul><h2 id=该问题产生原因>该问题产生原因 <a href=#%e8%af%a5%e9%97%ae%e9%a2%98%e4%ba%a7%e7%94%9f%e5%8e%9f%e5%9b%a0 class=anchor aria-hidden=true>#</a><a href=#该问题产生原因 class=anchor aria-hidden=true>#</a></h2><p>好，事情至此，我们先来解答本文开头遇到的问题？</p><ul><li>go1.13中对testing package的初始化逻辑做了一点调整，它将flags的初始化逻辑放在了main程序中，所有的其他package的func init()执行之后；</li><li>go官方其实不建议在func init()中定义一些flags的，除非是main package。但是我们很多开发并不了解这个背景，经常在func init()中定义一些flags并Parse，甚至是在_test.go文件中;</li><li>go1.13做了上述调整之后，在func init()中执行flag.Parse()时，如果go test传递了一些还没有来得及注册的选项，如-test.timeout是在func main()执行后注册，就会报错"flag -test.timeout provided but not defined"。</li></ul><p>到这，我们解释了问题产生的原因了。</p><h2 id=如何规避该问题>如何规避该问题 <a href=#%e5%a6%82%e4%bd%95%e8%a7%84%e9%81%bf%e8%af%a5%e9%97%ae%e9%a2%98 class=anchor aria-hidden=true>#</a><a href=#如何规避该问题 class=anchor aria-hidden=true>#</a></h2><p>现在，我们再来看下如何规避上述问题，有些情况下，确实有需要在_test.go中定义一些flags进行精细化控制的情况。</p><p>我们了解到，如果我们自定义了TestMain函数，go test就会生成这样的代码:</p><p>file: _testmain.go</p><pre><code class=language-go>func main() {
+    m := testing.MainStart(testdeps.TestDeps(), tests, benchmarks, examples)
+
+    _xtest.TestMain(m)
+}
+</code></pre><p>在testing.MainStart中执行testing框架的选项注册逻辑，如-test.run、-test.timeout等等，我们可以在_xtest这个导入别名对应package中定义好flags，可以在package级别定义，也可以在func init()中定义，也可以在func TestMain()中定义，只要保证，执行flag.Parse()的时候是在TestMain或者更之后的单元测试函数中就可以。</p><p>这个时候，所有的package的选项都正常注册了，包括testing package的，在TestMain中执行flag.Parse()就不会再出现“flag &mldr; provided but not defined"的奇葩情况。</p><h2 id=区分testing-flags以及自定义flags>区分testing flags以及自定义flags <a href=#%e5%8c%ba%e5%88%86testing-flags%e4%bb%a5%e5%8f%8a%e8%87%aa%e5%ae%9a%e4%b9%89flags class=anchor aria-hidden=true>#</a><a href=#区分testing-flags以及自定义flags class=anchor aria-hidden=true>#</a></h2><p>另外，关于自定义flag与testing package定义的重名的问题，其实go test是有考虑到的，用参数&ndash;args分开就可以了，前面的是给testing解析的，后面是给自定义的解析的，testing自己的flag名带“test.”前缀，其实是可以省略掉的。</p><h2 id=再看go-test代码生成>再看go test代码生成 <a href=#%e5%86%8d%e7%9c%8bgo-test%e4%bb%a3%e7%a0%81%e7%94%9f%e6%88%90 class=anchor aria-hidden=true>#</a><a href=#再看go-test代码生成 class=anchor aria-hidden=true>#</a></h2><p>下面是问题的回归，及定位过程中的源码分析！</p><p>_testmain.go的生成，是通过go模板来生成的，模板路径详见：src/cmd/go/internal/load/test.go，搜索变量’testmainTmpl’：</p><pre><code class=language-go>// Code generated by 'go test'. DO NOT EDIT.
+
+package main
+
+import (
+	&quot;os&quot;
+{{if .TestMain}}
+	&quot;reflect&quot;
+{{end}}
+	&quot;testing&quot;
+	&quot;testing/internal/testdeps&quot;
+
+{{if .ImportTest}}
+	{{if .NeedTest}}_test{{else}}_{{end}} {{.Package.ImportPath | printf &quot;%q&quot;}}
+{{end}}
+{{if .ImportXtest}}
+	{{if .NeedXtest}}_xtest{{else}}_{{end}} {{.Package.ImportPath | printf &quot;%s_test&quot; | printf &quot;%q&quot;}}
+{{end}}
+...
+)
+
+var tests = []testing.InternalTest{
+{{range .Tests}}
+	{&quot;{{.Name}}&quot;, {{.Package}}.{{.Name}}},
+{{end}}
+}
+
+var benchmarks = []testing.InternalBenchmark{
+{{range .Benchmarks}}
+	{&quot;{{.Name}}&quot;, {{.Package}}.{{.Name}}},
+{{end}}
+}
+
+var examples = []testing.InternalExample{
+{{range .Examples}}
+	{&quot;{{.Name}}&quot;, {{.Package}}.{{.Name}}, {{.Output | printf &quot;%q&quot;}}, {{.Unordered}}},
+{{end}}
+}
+
+func init() {
+	testdeps.ImportPath = {{.ImportPath | printf &quot;%q&quot;}}
+}
+
+...
+
+func main() {
+    ...
+
+	m := testing.MainStart(testdeps.TestDeps{}, tests, benchmarks, examples)
+{{with .TestMain}}
+	{{.Package}}.{{.Name}}(m)
+	os.Exit(int(reflect.ValueOf(m).Elem().FieldByName(&quot;exitCode&quot;).Int()))
+{{else}}
+	os.Exit(m.Run())
+{{end}}
+}
+</code></pre><p>结合前面给出的测试用例helloworld.go、helloworld_test.go，以及go test生成的_testmain.go，只要对go模板稍有认识，就很容易建立起模板和代码生成的联系，是很容易理解的。</p><h2 id=总结>总结 <a href=#%e6%80%bb%e7%bb%93 class=anchor aria-hidden=true>#</a><a href=#总结 class=anchor aria-hidden=true>#</a></h2><p>go1.13 testing package初始化flags顺序发生改变，引起了一些go test时"flag &mldr; provided but not defined"的错误，暴露了我们一些开发者对go test不熟悉、对go flags官方推荐用法不熟悉。本文解释了go test的大致处理逻辑、问题产生原因以及规避该问题的建议。</p><div class=edit-page><a href=https://github.com/hitzhangjie/myspace/blob/master/content/blog/2020-02-23-go%e6%ba%90%e7%a0%81%e5%89%96%e6%9e%90-gotest%e5%ae%9e%e7%8e%b0.md><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentcolor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-edit-2"><path d="M17 3a2.828 2.828.0 114 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>Edit this page on GitHub</a></div><div class="docs-navigation d-flex justify-content-between"><a href=/blog/2020-04-25-%E4%BD%A0%E7%9A%84mac%E6%9C%89%E5%93%AA%E4%BA%9B%E8%B6%81%E6%89%8B%E7%9A%84%E9%85%8D%E7%BD%AE/><div class="card my-1"><div class="card-body py-2">&larr; 你的mac有哪些“趁手”的配置呢？</div></div></a><a class=ms-auto href=/blog/2020-02-04-goneat-rpc%E6%A1%86%E6%9E%B6%E8%AE%BE%E8%AE%A1%E8%AF%A6%E8%A7%A3/><div class="card my-1"><div class="card-body py-2">GoNeat RPC框架设计详解 &rarr;</div></div></a></div></main></div></div></div><footer class="footer text-muted"><div class=container-xxl><div class=row><div class="col-lg-8 order-last order-lg-first"><ul class=list-inline><li class=list-inline-item>Powered by <a class=text-muted href=https://www.netlify.com/>Netlify</a>, <a class=text-muted href=https://gohugo.io/>Hugo</a>, and <a class=text-muted href=https://getdoks.org/>Doks</a></li></ul></div><div class="col-lg-8 order-first order-lg-last text-lg-end"><ul class=list-inline></ul></div><div class=col-lg-8 align=right><p><font size=-1>站点构建版本：v</font></p></div></div></div></footer><script src=/js/bootstrap.min.fdbe9b9ba88a036135318f3c721784d684ac9e3280fe282cc80d7d49f7f9c82780cd54228c1608685a230c09984300d7946fc471734d566fcebc148b65bd16db.js integrity="sha512-/b6bm6iKA2E1MY88cheE1oSsnjKA/igsyA19Sff5yCeAzVQijBYIaFojDAmYQwDXlG/EcXNNVm/OvBSLZb0W2w==" crossorigin=anonymous defer></script>
+<script src=/js/highlight.min.451fe6185924dcedf55c767559b5130f666f31c989f0078a75bafc346ad7364e180edfd731b1ca6bae0e90dfee88842885d284126ab0879f5067399e3a02b09e.js integrity="sha512-RR/mGFkk3O31XHZ1WbUTD2ZvMcmJ8AeKdbr8NGrXNk4YDt/XMbHKa64OkN/uiIQohdKEEmqwh59QZzmeOgKwng==" crossorigin=anonymous defer></script>
+<script src=/main.min.f16ffd9b364013a1df84be9cd7a45c470cb48639766bf5551e05bba845fe4ab150cb6436de43609bfed9af47c23bd5e395e9a10b932fa6fb2c4ee8f6cc78d7a3.js integrity="sha512-8W/9mzZAE6HfhL6c16RcRwy0hjl2a/VVHgW7qEX+SrFQy2Q23kNgm/7Zr0fCO9XjlemhC5MvpvssTuj2zHjXow==" crossorigin=anonymous defer></script>
+<script src=/index.min.4f5da6d5d5039814b7640914dc6d7af9b1826b54a2e8027123e345920f33e3dab6f98ed3b275444c8e3ce3de9faa12475d34fad04a0140d0a99b28e75bc5267c.js integrity="sha512-T12m1dUDmBS3ZAkU3G16+bGCa1Si6AJxI+NFkg8z49q2+Y7TsnVETI48496fqhJHXTT60EoBQNCpmyjnW8UmfA==" crossorigin=anonymous defer></script></body></html>

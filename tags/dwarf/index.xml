@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>dwarf on</title><link>/tags/dwarf/</link><description>Recent content in dwarf on</description><generator>Hugo -- gohugo.io</generator><language>en-US</language><lastBuildDate>Tue, 06 Oct 2020 08:48:23 +0000</lastBuildDate><atom:link href="/tags/dwarf/index.xml" rel="self" type="application/rss+xml"/><item><title>Debugger101: Go调试器开发内幕</title><link>/books/debugger101/</link><pubDate>Tue, 06 Oct 2020 08:48:23 +0000</pubDate><guid>/books/debugger101/</guid><description>授人以鱼不如授人以渔，调试器正是这样一款工具，它虽然不知道您程序中何处引入了bug或者理解不到位，但是当你想到它、捡起它，它就可以指引你一步步追根溯源。
+不仅要做授人以渔的工具，也要做授人以渔的人，不禁要问读者，你们可曾了解过调试器的内部实现？它是如何控制你程序执行的，它是如何知道指定内存地址处的指令或者数据类型的…本书旨在帮助读者打通对编译、调试工具链、调试信息标准以及操作系统之间的认识，使具备一定的调试器定制化开发的能力。
+由于本书内容涉及大量系统原理、调试信息标准、设计实现、go源码分析内容，篇幅很大，很难用几篇博文讲述清楚，因此单独写一本电子书，《Debugger101：go调试器开发内幕》。
+欢迎阅读，如您在阅读过程中遇到错误、疏漏、建议，不要犹豫，请给我提issue。</description></item><item><title>A Golang Debugger Book</title><link>/blog/2020-06-09-a-golang-debugger-book/</link><pubDate>Tue, 09 Jun 2020 20:25:07 +0800</pubDate><guid>/blog/2020-06-09-a-golang-debugger-book/</guid><description>18年开始学习go时，发现了一款调试器delve，陆陆续续地看了些源码、调试标准的东西，发现调试器是一个很好的切入视角来认识计算机系统，就想把这些东西理顺、分享一下。到现在为止，对开发工具链的认识都还有些认识上的不足，关键还是，觉得调试器就好比一个放大镜，放大一倍看清内存变量，放大两倍看清类型系统，放大三倍看清机器物理结构……这是简单的，涉及到运行时、操作系统、硬件等的特性，我是觉得很有意思，尤其是对部分想了解这些知识的人来说，还是有一定的参考意义的。
+https://github.com/hitzhangjie/golang-debugger-book。
+后来工作变动没有持续投入了，19年下半年支持trpc也没太多时间投入，19年年底的时候买了ipad花了连续几个周末啃了300页dwarf标准，坚持写完了dwarf相关的部分。后面开始支持epc又没时间了……
+现在各项工作陆陆陆续续有了眉目，也想把之前放下的东西再捡起来，感兴趣可以简单翻下，如果有小伙伴也有兴趣的话，欢迎业余时间一起继续下去，倒不是觉得是项多么出彩的内容，就是觉得有些值得深究的东西想去探索一下，还有就是一项工作搁置太久会有很浓的挫败感。
+腾讯的小伙伴们很优秀，如果能有小伙伴们助攻，这个应该会加速很多。
+dwarf v4标准解析 已完成
+dwarf数据提取 go标准库已提供
+delve源码解析 一小部分
+go类型系统、运行时、调试器结合 待补充
+go新版本准备切换dwarf v5、更好的linker，有些相关的知识，涉及到compiler、linker、debugger的协作&amp;hellip;
+其他
+其实，还有很多内容要补充，我也不知道最终会变成啥样，可能就是现在这样……曾经试图邀请几个小伙伴来搞下，可能本身没什么吸引力吧，最终还是这样。
+感兴趣才能坚持下去，每次想到它，都有种立即想投入的冲动，一个人的周末有点有限 :)</description></item></channel></rss>

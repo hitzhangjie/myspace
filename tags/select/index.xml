@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>select on</title><link>/tags/select/</link><description>Recent content in select on</description><generator>Hugo -- gohugo.io</generator><language>en-US</language><lastBuildDate>Sat, 17 Apr 2021 13:08:00 +0800</lastBuildDate><atom:link href="/tags/select/index.xml" rel="self" type="application/rss+xml"/><item><title>01一条SQL查询语句是如何执行的</title><link>/blog/01%E5%9F%BA%E7%A1%80%E6%9E%B6%E6%9E%84%E4%B8%80%E6%9D%A1sql%E6%9F%A5%E8%AF%A2%E8%AF%AD%E5%8F%A5%E6%98%AF%E5%A6%82%E4%BD%95%E6%89%A7%E8%A1%8C%E7%9A%84/</link><pubDate>Sat, 17 Apr 2021 13:08:00 +0800</pubDate><guid>/blog/01%E5%9F%BA%E7%A1%80%E6%9E%B6%E6%9E%84%E4%B8%80%E6%9D%A1sql%E6%9F%A5%E8%AF%A2%E8%AF%AD%E5%8F%A5%E6%98%AF%E5%A6%82%E4%BD%95%E6%89%A7%E8%A1%8C%E7%9A%84/</guid><description>MySQL基础架构
+mysql基础架构示意图，及主要流程介绍
+mysql 连接及内存管理
+mysql 8.0删除了查询缓存，为什么：https://mysqlserverteam.com/mysql-8-0-retiring-support-for-the-query-cache/
+优化器：存在多个索引，应该用哪一个？
+mysql select语句中不存在的列，是在哪个阶段分析出来的呢？分析器
+mysqld程序入口:
+main: https://sourcegraph.com/github.com/mysql/mysql-server/-/blob/sql/main.cc#L23:12 mysqld_main: https://sourcegraph.com/github.com/mysql/mysql-server/-/blob/sql/mysqld.cc#L7680:5</description></item></channel></rss>

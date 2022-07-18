@@ -1,0 +1,144 @@
+<!doctype html><html lang=en-us><head><meta charset=utf-8><meta http-equiv=x-ua-compatible content="ie=edge"><meta name=viewport content="width=device-width,initial-scale=1,shrink-to-fit=no"><link rel=preload as=font href=/fonts/vendor/jost/jost-v4-latin-regular.woff2 type=font/woff2 crossorigin><link rel=preload as=font href=/fonts/vendor/jost/jost-v4-latin-500.woff2 type=font/woff2 crossorigin><link rel=preload as=font href=/fonts/vendor/jost/jost-v4-latin-700.woff2 type=font/woff2 crossorigin><link rel=stylesheet href=/main.63b6b8ff933309fcc94a30e21d69932290c8643fa1a32893f5681778c776ed3e51c237a1acd00b42426b3bf780c351b4a6ce75b3b659915ef0dd610b2e027a8c.css integrity="sha512-Y7a4/5MzCfzJSjDiHWmTIpDIZD+hoyiT9WgXeMd27T5RwjehrNALQkJrO/eAw1G0ps51s7ZZkV7w3WELLgJ6jA==" crossorigin=anonymous><noscript><style>img.lazyload{display:none}</style></noscript><meta name=robots content="index, follow"><meta name=googlebot content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1"><meta name=bingbot content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1"><title>golang function-closure 实现机制 - MySpace</title><meta name=description content="go函数闭包设计实现"><link rel=canonical href=/blog/2018-05-19-golang-function-closure%E5%AE%9E%E7%8E%B0%E6%9C%BA%E5%88%B6/><meta property="og:locale" content="en_US"><meta property="og:type" content="article"><meta property="og:title" content="golang function-closure 实现机制"><meta property="og:description" content="go函数闭包设计实现"><meta property="og:url" content="/blog/2018-05-19-golang-function-closure%E5%AE%9E%E7%8E%B0%E6%9C%BA%E5%88%B6/"><meta property="og:site_name" content="MySpace"><meta property="article:published_time" content="2018-05-19T19:55:15+08:00"><meta property="article:modified_time" content="2018-05-19T19:55:15+08:00"><meta property="og:image" content="/doks.png"><meta property="og:image:alt" content="MySpace"><meta name=twitter:card content="summary_large_image"><meta name=twitter:site content="@hitzhangjie"><meta name=twitter:creator content="@hitzhangjie"><meta name=twitter:title content="golang function-closure 实现机制"><meta name=twitter:description content="go函数闭包设计实现"><meta name=twitter:image content="/doks.png"><meta name=twitter:image:alt content="golang function-closure 实现机制"><script type=application/ld+json>{"@context":"https://schema.org","@graph":[{"@type":"Person","@id":"/#/schema/person/1","name":"","url":"/","sameAs":["https://twitter.com/hitzhangjie","https://www.linkedin.com/in/hitzhangjie/","https://github.com/hitzhangjie"],"image":{"@type":"ImageObject","@id":"/#/schema/image/1","url":"/\u003cnil\u003e","width":null,"height":null,"caption":""}},{"@type":"WebSite","@id":"/#/schema/website/1","url":"/","name":"MySpace","description":"MySpace is a hitzhangjie\u0027s personal space, for blogs, books, journey, thinkings.","publisher":{"@id":"/#/schema/person/1"}},{"@type":"WebPage","@id":"/blog/2018-05-19-golang-function-closure%E5%AE%9E%E7%8E%B0%E6%9C%BA%E5%88%B6/","url":"/blog/2018-05-19-golang-function-closure%E5%AE%9E%E7%8E%B0%E6%9C%BA%E5%88%B6/","name":"golang function-closure 实现机制","description":"go函数闭包设计实现","isPartOf":{"@id":"/#/schema/website/1"},"about":{"@id":"/#/schema/person/1"},"datePublished":"2018-05-19T19:55:15CET","dateModified":"2018-05-19T19:55:15CET","breadcrumb":{"@id":"/blog/2018-05-19-golang-function-closure%E5%AE%9E%E7%8E%B0%E6%9C%BA%E5%88%B6/#/schema/breadcrumb/1"},"primaryImageOfPage":{"@id":"/blog/2018-05-19-golang-function-closure%E5%AE%9E%E7%8E%B0%E6%9C%BA%E5%88%B6/#/schema/image/2"},"inLanguage":"","potentialAction":[{"@type":"ReadAction","target":["/blog/2018-05-19-golang-function-closure%E5%AE%9E%E7%8E%B0%E6%9C%BA%E5%88%B6/"]}]},{"@type":"BreadcrumbList","@id":"/blog/2018-05-19-golang-function-closure%E5%AE%9E%E7%8E%B0%E6%9C%BA%E5%88%B6/#/schema/breadcrumb/1","name":"Breadcrumbs","itemListElement":[{"@type":"ListItem","position":1,"item":{"@type":"WebPage","@id":"/","url":"/","name":"Home"}},{"@type":"ListItem","position":2,"item":{"@id":"/blog2018-05-19-golang-function-closure%E5%AE%9E%E7%8E%B0%E6%9C%BA%E5%88%B6/"}}]},{"@context":"https://schema.org","@graph":[{"@type":"Article","@id":"/#/schema/article/1","headline":"golang function-closure 实现机制","description":"go函数闭包设计实现","isPartOf":{"@id":"/blog/2018-05-19-golang-function-closure%E5%AE%9E%E7%8E%B0%E6%9C%BA%E5%88%B6/"},"mainEntityOfPage":{"@id":"/blog/2018-05-19-golang-function-closure%E5%AE%9E%E7%8E%B0%E6%9C%BA%E5%88%B6/"},"datePublished":"2018-05-19T19:55:15CET","dateModified":"2018-05-19T19:55:15CET","author":{"@id":"/#/schema/person/2"},"publisher":{"@id":"/#/schema/person/1"},"image":{"@id":"/blog/2018-05-19-golang-function-closure%E5%AE%9E%E7%8E%B0%E6%9C%BA%E5%88%B6/#/schema/image/2"}}]},{"@context":"https://schema.org","@graph":[{"@type":"Person","@id":"/#/schema/person/2","name":null,"sameAs":[]}]},{"@context":"https://schema.org","@graph":[{"@type":"ImageObject","@id":"/blog/2018-05-19-golang-function-closure%E5%AE%9E%E7%8E%B0%E6%9C%BA%E5%88%B6/#/schema/image/2","url":"/doks.png","contentUrl":"/doks.png","caption":"golang function-closure 实现机制"}]}]}</script><meta name=theme-color content="#fff"><link rel=icon href=/favicon.ico sizes=any><link rel=icon type=image/svg+xml href=/favicon.svg><link rel=apple-touch-icon sizes=180x180 href=/apple-touch-icon.png><link rel=icon type=image/png sizes=32x32 href=/favicon-32x32.png><link rel=icon type=image/png sizes=16x16 href=/favicon-16x16.png><link rel=manifest crossorigin=use-credentials href=/site.webmanifest><script type=text/javascript src="https://platform-api.sharethis.com/js/sharethis.js#property=607868a58d7101001829a8df&product=sop" async></script><style>[alt~=sharing]{border:0;box-shadow:none}div#st-1{text-align:unset}div#st-1 .st-btn{height:24px;padding:0 4px}div#st-1 .st-btn>img{top:4.2px}div#st-2 .st-btn{height:24px;padding:0 4px}div#st-2 .st-btn>img{top:4.2px}</style></head><body class="blog single"><div class=sticky-top><div class=header-bar></div><header class="navbar navbar-expand-lg navbar-light doks-navbar"><nav class="container-xxl flex-wrap flex-lg-nowrap" aria-label="Main navigation"><a class="navbar-brand order-0" href=/ aria-label=MySpace>MySpace</a>
+<button class="btn btn-menu order-2 d-block d-lg-none" type=button data-bs-toggle=offcanvas data-bs-target=#offcanvasDoks aria-controls=offcanvasDoks aria-label="Open main menu"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentcolor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-menu"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button><div class="offcanvas offcanvas-end border-0 py-lg-1" tabindex=-1 id=offcanvasDoks data-bs-backdrop=true aria-labelledby=offcanvasDoksLabel><div class="header-bar d-lg-none"></div><div class="offcanvas-header d-lg-none"><h2 class="h5 offcanvas-title ps-2" id=offcanvasDoksLabel><a class=text-dark href=/>MySpace</a></h2><button type=button class="btn-close text-reset me-2" data-bs-dismiss=offcanvas aria-label="Close main menu"></button></div><div class="offcanvas-body p-4 p-lg-0"><ul class="nav flex-column flex-lg-row align-items-lg-center mt-2 mt-lg-0 ms-lg-2 me-lg-auto"><li class=nav-item><a class="nav-link ps-0 py-1 active" href=/blog/>Blog</a></li><li class=nav-item><a class="nav-link ps-0 py-1" href=/books/>Books</a></li><li class=nav-item><a class="nav-link ps-0 py-1" href=/journey/introduction>Journey</a></li></ul><hr class="text-black-50 my-4 d-lg-none"><form class="doks-search position-relative flex-grow-1 ms-lg-auto me-lg-2"><input id=search class="form-control is-search" type=search placeholder="Search docs..." aria-label="Search docs..." autocomplete=off><div id=suggestions class="shadow bg-white rounded d-none"></div></form><hr class="text-black-50 my-4 d-lg-none"><ul class="nav flex-column flex-lg-row"><li class=nav-item><a class="nav-link social-link" href=https://twitter.com/hitzhangjie><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentcolor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-twitter"><path d="M23 3a10.9 10.9.0 01-3.14 1.53 4.48 4.48.0 00-7.86 3v1A10.66 10.66.0 013 4s-4 9 5 13a11.64 11.64.0 01-7 2c9 5 20 0 20-11.5a4.5 4.5.0 00-.08-.83A7.72 7.72.0 0023 3z"/></svg><small class="ms-2 d-lg-none">Twitter</small></a></li><li class=nav-item><a class="nav-link social-link" href=https://github.com/hitzhangjie><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentcolor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-github"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37.0 00-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44.0 0020 4.77 5.07 5.07.0 0019.91 1S18.73.65 16 2.48a13.38 13.38.0 00-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07.0 005 4.77 5.44 5.44.0 003.5 8.55c0 5.42 3.3 6.61 6.44 7A3.37 3.37.0 009 18.13V22"/></svg><small class="ms-2 d-lg-none">GitHub</small></a></li></ul></div></div></nav></header></div><div class="wrap container-xxl" role=document><div class=content><div class="row flex-xl-nowrap"><div class="col-lg-5 col-xl-4 docs-sidebar"><nav class=docs-links aria-label="Main navigation"><h3>Tag List</h3><ol><li><a href=/tags/go/>go</a></li><li><a href=/tags/golang/>golang</a></li><li><a href=/tags/closure/>closure</a></li></ol></nav></div><nav class="docs-toc d-none d-xl-block col-xl-3" aria-label="Secondary navigation"><div class=page-links><h3>On this page</h3><nav id=TableOfContents><ul><li><a href=#1-golang中函数内部表示是什么样子的>1 golang中函数内部表示是什么样子的？</a></li><li><a href=#2-golang中闭包是怎么实现的>2 golang中闭包是怎么实现的？</a></li><li><a href=#3-总结>3 总结</a></li><li><a href=#附golang闭包处理关键代码>附：golang闭包处理关键代码</a></li></ul></nav></div></nav><main class="docs-content col-lg-11 col-xl-9"><h1>golang function-closure 实现机制</h1><div style=display:flex><div>分享:&nbsp;&nbsp;</div><div><div class=sharethis-inline-share-buttons></div></div></div><hr><p class=lead></p><p>golang里面函数时first-class citizen，可以作为值进行参数传递，不管是普通函数“func abc()”，还是成员方法“func (x X) xxx()”，还是一个闭包“func () { return func(){&mldr;.}}”……看上去很方便，不禁要问，golang里面funciton和closure是如何实现的呢？扒拉了下源码，这里简单总结下。</p><h1 id=1-golang中函数内部表示是什么样子的>1 golang中函数内部表示是什么样子的？ <a href=#1-golang%e4%b8%ad%e5%87%bd%e6%95%b0%e5%86%85%e9%83%a8%e8%a1%a8%e7%a4%ba%e6%98%af%e4%bb%80%e4%b9%88%e6%a0%b7%e5%ad%90%e7%9a%84 class=anchor aria-hidden=true>#</a></h1><p>看下golang cmd/compile/internal/types/type.go中对Func类型的定义：</p><pre><code class=language-golang>// Func contains Type fields specific to func types.
+type Func struct {
+   Receiver *Type  // function receiver，接受者类型，每个函数定义都包括该字段，可以为nil或non-nil
+   Results  *Type   // function results，返回值类型
+   Params   *Type // function params，参数列表类型
+   Nname *Node   // function name，函数名
+   // Argwid is the total width of the function receiver, params, and results.
+   // It gets calculated via a temporary TFUNCARGS type.
+   // Note that TFUNC's Width is Widthptr.
+   Argwid int64
+   Outnamed bool // 是否是可导出的？
+}
+</code></pre><p>通过这个Func定义来看，其可以覆盖golang里面所有的函数类型声明了，不管是普通函数，还是成员方法等等。</p><h1 id=2-golang中闭包是怎么实现的>2 golang中闭包是怎么实现的？ <a href=#2-golang%e4%b8%ad%e9%97%ad%e5%8c%85%e6%98%af%e6%80%8e%e4%b9%88%e5%ae%9e%e7%8e%b0%e7%9a%84 class=anchor aria-hidden=true>#</a></h1><p>前端时间组内分享闭包使用的时候，觉得这玩意虽然轻巧但是太容易出错了，究其原因是因为不了解闭包的实现原理。那么闭包是如何实现的呢，抽时间扒拉了一下golang中实现闭包的代码，看完后瞬间觉得闭包很简单。</p><p>来简单总结一下，<strong>闭包就是函数+环境</strong>，问题是<strong>这里的环境是如何与函数进行绑定的呢</strong>？</p><blockquote><p>remark: 一开始看了上面的Func类型定义之后，我以为是golang创建了一个虚拟的类型（里面各个字段值为闭包捕获的变量值）然后将该虚拟类型作为receiver-type来实现的呢，可是仔细一想这种思路站不住脚，因为闭包是golang里面的first-class citizen，闭包实现应该非常轻量才对，如果像我最初这种想法那实在是太复杂了，想想要创建多少虚拟类型及其对象吧。</p></blockquote><p>看了下源代码，总结一下golang中的实现思路，考虑到闭包对象是否能重复使用，分为两个场景进行处理：</p><p><strong>1) 假如闭包定义后立即被调用</strong>
+因为只会被使用一次，所以应该力图避免闭包对象的内存分配操作，那怎么优化一下呢，以下面的示例代码为例。</p><pre><code class=language-golang>func(a int) {
+    println(byval)
+    byref++
+}(42)
+</code></pre><p>上面的闭包将被转换为简单函数调用的形式：</p><pre><code class=language-golang>func(byval int, &amp;byref *int, a int) {
+    println(byval)
+    (*&amp;byref)++
+}(byval, &amp;byref, 42)
+</code></pre><p>注意看函数原型的变化，原来闭包里面捕获的变量都被转换成了通过函数参数来供值：</p><ul><li>因为println操作不涉及对byval变量的修改操作，所以是按值捕获；</li><li>而byref++涉及到对捕获变量的修改，所以是按引用捕获，对于按引用捕获的变量会进行特殊处理，golang编译器会在编译时将按引用捕获的变量名byref转换成“&byref”，同时将其类型转换成pointer类型，捕获变量对应的写操作也会转换为通过pointer来操作。</li></ul><p><strong>2） 假如闭包定以后并不是立即调用</strong>
+闭包定义后不是立即使用，而是后续调用，这种情况下同一个闭包可能调用多次，这种情况下就需要创建闭包对象，如何实现呢？</p><ul><li>如果变量是按值捕获，并且该变量占用存储空间小于2*sizeof(int)，那么就通过在函数体内创建局部变量的形式来shadow捕获的变量，相比于通过引用捕获，这么做的好处应该是考虑到减少引用数量、减少逃逸分析相关的计算。</li><li>如果变量是按引用捕获，或者按值捕获但是捕获的变量占用存储空间较大（拷贝到本地做局部变量代价太大），这种情况下就将捕获的变量var转换成pointer类型的“&var”，并在函数prologue阶段将其初始化为捕获变量的值。</li></ul><p>这部分的代码详见：cmd/compile/gc/closure.go中的方法transformclosure(&mldr;)。
+闭包就是函数体+环境，环境就是像这样绑定的。</p><h1 id=3-总结>3 总结 <a href=#3-%e6%80%bb%e7%bb%93 class=anchor aria-hidden=true>#</a></h1><p>本文简要描述了golang中对函数的内部定义，以及闭包的大致实现思路，加深了理解。</p><h1 id=附golang闭包处理关键代码>附：golang闭包处理关键代码 <a href=#%e9%99%84golang%e9%97%ad%e5%8c%85%e5%a4%84%e7%90%86%e5%85%b3%e9%94%ae%e4%bb%a3%e7%a0%81 class=anchor aria-hidden=true>#</a></h1><pre><code class=language-golang>func transformclosure(xfunc *Node) {
+	lno := lineno
+	lineno = xfunc.Pos
+	func_ := xfunc.Func.Closure
+
+	if func_.Func.Top&amp;Ecall != 0 {
+		// If the closure is directly called, we transform it to a plain function call
+		// with variables passed as args. This avoids allocation of a closure object.
+		// Here we do only a part of the transformation. Walk of OCALLFUNC(OCLOSURE)
+		// will complete the transformation later.
+		// For illustration, the following closure:
+		//	func(a int) {
+		//		println(byval)
+		//		byref++
+		//	}(42)
+		// becomes:
+		//	func(byval int, &amp;byref *int, a int) {
+		//		println(byval)
+		//		(*&amp;byref)++
+		//	}(byval, &amp;byref, 42)
+
+		// f is ONAME of the actual function.
+		f := xfunc.Func.Nname
+
+		// We are going to insert captured variables before input args.
+		var params []*types.Field
+		var decls []*Node
+		for _, v := range func_.Func.Cvars.Slice() {
+			if v.Op == OXXX {
+				continue
+			}
+			fld := types.NewField()
+			fld.Funarg = types.FunargParams
+			if v.Name.Byval() {
+				// If v is captured by value, we merely downgrade it to PPARAM.
+				v.SetClass(PPARAM)
+				fld.Nname = asTypesNode(v)
+			} else {
+				// If v of type T is captured by reference,
+				// we introduce function param &amp;v *T
+				// and v remains PAUTOHEAP with &amp;v heapaddr
+				// (accesses will implicitly deref &amp;v).
+				addr := newname(lookup(&quot;&amp;&quot; + v.Sym.Name))
+				addr.Type = types.NewPtr(v.Type)
+				addr.SetClass(PPARAM)
+				v.Name.Param.Heapaddr = addr
+				fld.Nname = asTypesNode(addr)
+			}
+
+			fld.Type = asNode(fld.Nname).Type
+			fld.Sym = asNode(fld.Nname).Sym
+
+			params = append(params, fld)
+			decls = append(decls, asNode(fld.Nname))
+		}
+
+		if len(params) &gt; 0 {
+			// Prepend params and decls.
+			f.Type.Params().SetFields(append(params, f.Type.Params().FieldSlice()...))
+			xfunc.Func.Dcl = append(decls, xfunc.Func.Dcl...)
+		}
+
+		dowidth(f.Type)
+		xfunc.Type = f.Type // update type of ODCLFUNC
+	} else {
+		// The closure is not called, so it is going to stay as closure.
+		var body []*Node
+		offset := int64(Widthptr)
+		for _, v := range func_.Func.Cvars.Slice() {
+			if v.Op == OXXX {
+				continue
+			}
+
+			// cv refers to the field inside of closure OSTRUCTLIT.
+			cv := nod(OCLOSUREVAR, nil, nil)
+
+			cv.Type = v.Type
+			if !v.Name.Byval() {
+				cv.Type = types.NewPtr(v.Type)
+			}
+			offset = Rnd(offset, int64(cv.Type.Align))
+			cv.Xoffset = offset
+			offset += cv.Type.Width
+
+			if v.Name.Byval() &amp;&amp; v.Type.Width &lt;= int64(2*Widthptr) {
+				// If it is a small variable captured by value, downgrade it to PAUTO.
+				v.SetClass(PAUTO)
+				xfunc.Func.Dcl = append(xfunc.Func.Dcl, v)
+				body = append(body, nod(OAS, v, cv))
+			} else {
+				// Declare variable holding addresses taken from closure
+				// and initialize in entry prologue.
+				addr := newname(lookup(&quot;&amp;&quot; + v.Sym.Name))
+				addr.Type = types.NewPtr(v.Type)
+				addr.SetClass(PAUTO)
+				addr.Name.SetUsed(true)
+				addr.Name.Curfn = xfunc
+				xfunc.Func.Dcl = append(xfunc.Func.Dcl, addr)
+				v.Name.Param.Heapaddr = addr
+				if v.Name.Byval() {
+					cv = nod(OADDR, cv, nil)
+				}
+				body = append(body, nod(OAS, addr, cv))
+			}
+		}
+
+		if len(body) &gt; 0 {
+			typecheckslice(body, Etop)
+			walkstmtlist(body)
+			xfunc.Func.Enter.Set(body)
+			xfunc.Func.SetNeedctxt(true)
+		}
+	}
+
+	lineno = lno
+}
+</code></pre><div class=edit-page><a href=https://github.com/hitzhangjie/myspace/blob/master/content/blog/2018-05-19-golang-function-closure%e5%ae%9e%e7%8e%b0%e6%9c%ba%e5%88%b6.md><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentcolor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-edit-2"><path d="M17 3a2.828 2.828.0 114 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>Edit this page on GitHub</a></div><div class="docs-navigation d-flex justify-content-between"><a href=/blog/2018-05-21-golang-method-receiver-type%E7%9A%84%E6%A2%97/><div class="card my-1"><div class="card-body py-2">&larr; golang method receiver-type的梗</div></div></a><a class=ms-auto href=/blog/2018-05-19-golang-select-case%E5%AE%9E%E7%8E%B0%E6%9C%BA%E5%88%B6/><div class="card my-1"><div class="card-body py-2">golang select-case 实现机制 &rarr;</div></div></a></div></main></div></div></div><footer class="footer text-muted"><div class=container-xxl><div class=row><div class="col-lg-8 order-last order-lg-first"><ul class=list-inline><li class=list-inline-item>Powered by <a class=text-muted href=https://www.netlify.com/>Netlify</a>, <a class=text-muted href=https://gohugo.io/>Hugo</a>, and <a class=text-muted href=https://getdoks.org/>Doks</a></li></ul></div><div class="col-lg-8 order-first order-lg-last text-lg-end"><ul class=list-inline></ul></div><div class=col-lg-8 align=right><p><font size=-1>站点构建版本：v</font></p></div></div></div></footer><script src=/js/bootstrap.min.fdbe9b9ba88a036135318f3c721784d684ac9e3280fe282cc80d7d49f7f9c82780cd54228c1608685a230c09984300d7946fc471734d566fcebc148b65bd16db.js integrity="sha512-/b6bm6iKA2E1MY88cheE1oSsnjKA/igsyA19Sff5yCeAzVQijBYIaFojDAmYQwDXlG/EcXNNVm/OvBSLZb0W2w==" crossorigin=anonymous defer></script>
+<script src=/js/highlight.min.451fe6185924dcedf55c767559b5130f666f31c989f0078a75bafc346ad7364e180edfd731b1ca6bae0e90dfee88842885d284126ab0879f5067399e3a02b09e.js integrity="sha512-RR/mGFkk3O31XHZ1WbUTD2ZvMcmJ8AeKdbr8NGrXNk4YDt/XMbHKa64OkN/uiIQohdKEEmqwh59QZzmeOgKwng==" crossorigin=anonymous defer></script>
+<script src=/main.min.f16ffd9b364013a1df84be9cd7a45c470cb48639766bf5551e05bba845fe4ab150cb6436de43609bfed9af47c23bd5e395e9a10b932fa6fb2c4ee8f6cc78d7a3.js integrity="sha512-8W/9mzZAE6HfhL6c16RcRwy0hjl2a/VVHgW7qEX+SrFQy2Q23kNgm/7Zr0fCO9XjlemhC5MvpvssTuj2zHjXow==" crossorigin=anonymous defer></script>
+<script src=/index.min.4f5da6d5d5039814b7640914dc6d7af9b1826b54a2e8027123e345920f33e3dab6f98ed3b275444c8e3ce3de9faa12475d34fad04a0140d0a99b28e75bc5267c.js integrity="sha512-T12m1dUDmBS3ZAkU3G16+bGCa1Si6AJxI+NFkg8z49q2+Y7TsnVETI48496fqhJHXTT60EoBQNCpmyjnW8UmfA==" crossorigin=anonymous defer></script></body></html>

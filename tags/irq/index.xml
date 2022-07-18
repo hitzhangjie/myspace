@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>irq on</title><link>/tags/irq/</link><description>Recent content in irq on</description><generator>Hugo -- gohugo.io</generator><language>en-US</language><lastBuildDate>Thu, 30 Jun 2022 07:45:47 +0800</lastBuildDate><atom:link href="/tags/irq/index.xml" rel="self" type="application/rss+xml"/><item><title>中断请求负载均衡</title><link>/blog/irq-balancing/</link><pubDate>Thu, 30 Jun 2022 07:45:47 +0800</pubDate><guid>/blog/irq-balancing/</guid><description>如果网卡NIC支持多队列，可以直接设置NIC多个队列的irq affinity到不同的CPU来实现负载均衡； 如果网卡NIC是单队列的，也可以通过RFS或者RPS在soft interrupt层面进行模拟，来实现负载均衡； RPS、RFS这种方式主要是针对单队列NIC的优化。
+我们是以网卡中断作为示例，对其他不同的设备其实也可以做类似处理。 并不是说所有的设备中断都需要绑定到多个cpu来实现负载均衡，因为有的外设的中断请求数可能并不多，就没必要了。
+多队列网卡ethtool -l eth0可以看到combined字段，该字段表明NIC有几个队列，如果有多个队列，比如8个， 那么对应的cpu affinity可以直接设置成ff，表示CPU0-7都可以收NIC中断请求来实现负载均衡。
+lspci -vvv可以看到不同的设备对应的中断号，如网卡设别可能是：pin A routed to IRQ 10，我们就知道10是其中断号。
+TODO:
+irq affinity设定了情况下，OS和硬件是如何交互的？如何负载均衡的，是在硬件层面实现的？ RPS/RFS，这种软中断层面的处理，具体细节是怎样的？ 下面以多队列网卡为例来说明怎么回事。
+多队列网卡实现原理 # 1.硬件实现原理 # 下图是Intel 82575硬件逻辑图，有四个硬件队列。当收到报文时，通过hash包头的SIP、Sport、DIP、Dport四元组，将一条流总是收到相同的队列。同时触发与该队列绑定的中断。
+2.单队列驱动原理 # kernel从2.6.21版本之前不支持多队列特性，一个网卡只能申请一个中断号，因此同一个时刻只有一个核在处理网卡收到的包。如图2.1，协议栈通过NAPI轮询收取各个硬件queue中的报文到图2.2的net_device数据结构中，通过QDisc队列将报文发送到网卡。
+2.多队列驱动原理 # 2.6.21开始支持多队列特性，当网卡驱动加载时，通过获取的网卡型号，得到网卡的硬件queue的数量，并结合CPU核的数量，最终通过Sum=Min（网卡queue，CPU core）得出所要激活的网卡queue数量（Sum），并申请Sum个中断号，分配给激活的各个queue。
+如图3.1，当某个queue收到报文时，触发相应的中断，收到中断的核，将该任务加入到协议栈负责收包的该核的NET_RX_SOFTIRQ队列中（NET_RX_SOFTIRQ在每个核上都有一个实例），在NET_RX_SOFTIRQ中，调用NAPI的收包接口，将报文收到CPU中如图3.2的有多个netdev_queue的net_device数据结构中。
+这样，CPU的各个核可以并发的收包，就不会因为一个核不能满足需求，导致网络IO性能下降。
+RSS（Receive Side Scaling，网卡的硬件特性，多队列网卡将不同的流分发到不同的CPU上实现负载均衡）需要硬件支持，在不支持RSS的环境中，RPS/RFS提供了软件的解决方案。
+RPS（Receive Packet Steering）是把一个rx队列的软中断分发到多个CPU核上，从而达到负载均衡的目的。 RFS（Receive Flow Steering）是RPS的扩展，RPS只依靠hash来控制数据包，提供负载平衡，但是没有考虑到应用程序的位置（指应用程序所在CPU）。RFS目标是通过指派应用线程正在运行的CPU处理中断，增加数据缓存的命中率。 参考内容：</description></item><item><title>中断请求亲和性</title><link>/blog/irq-affinity/</link><pubDate>Wed, 29 Jun 2022 20:48:50 +0800</pubDate><guid>/blog/irq-affinity/</guid><description>SMP IRQ affinity，指的是对称多处理器中的中断请求绑定。
+/proc/irq/IRQ#/smp_affinity和/proc/irq/IRQ#/smp_affinity_list指明了允许接收某 个中断请求IRQ#的多个或某个cpu。它是一个位掩码smp_affinity或者一个cpu列表 smp_affinity_list，其中记录了允许接受该中断请求的cpu。不允许禁止所有cpu接收该 中断请求，如果一个中断控制器不支持中断请求绑定，那么只能采用默认值，即允许所有 cpu接收该中断请求，并且这个值不会被修改。
+/proc/irq/default_smp_affinity指明了默认的中断绑定掩码，这个默认值将应用于所有 的非活动的、未激活的中断号。一旦一个中断号被分配、激活，那么它的中断绑定掩码将 被设置为这个默认值。这个默认值可以通过前面提到过的方法进行修改。这个默认掩码的 值为0xffffffff，请注意，该掩码是32位的。
+这里举个例子，网卡eth1中断请求IRQ44限定发送到CPU0-3，而后再限定发送到CPU4-7。
+网卡向cpu发中断请求44，下面我们对这个中断请求与cpu的绑定关系进行设置，并通过 ping命令进行测试，网卡会将接收到的icmp请求，以中断44的形式发送到绑定的cpu，通 过查看cpu接收到的中断请求数量，我们可以判断，这个44这个中断请求与cpu的绑定关系 。
+[root@moon 44]# cd /proc/irq/44 [root@moon 44]# cat smp_affinity ffffffff 首先，查看到44这个中断请求的默认绑定掩码为0xffffffff，说明，所有的cpu都可以接 收该中断请求。
+[root@moon 44]# echo 0f &amp;gt; smp_affinity [root@moon 44]# cat smp_affinity 0000000f 然后我们设置smp_affinity的值为0x0000000f，即使得编号为0-3的cpu允许接收该44这个 中断请求，其他的cpu都不会接收44这个中断请求。
+[root@moon 44]# ping -f h PING hell (195.4.7.3): 56 data bytes ... --- hell ping statistics --- 6029 packets transmitted, 6027 packets received, 0% packet loss round-trip min/avg/max = 0.</description></item></channel></rss>

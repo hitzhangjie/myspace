@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>rm on</title><link>/tags/rm/</link><description>Recent content in rm on</description><generator>Hugo -- gohugo.io</generator><language>en-US</language><lastBuildDate>Fri, 18 Oct 2019 15:00:01 +0800</lastBuildDate><atom:link href="/tags/rm/index.xml" rel="self" type="application/rss+xml"/><item><title>如何实现一个更安全的删除命令rm</title><link>/blog/2019-10-18-%E5%A6%82%E4%BD%95%E5%AE%9E%E7%8E%B0%E4%B8%80%E4%B8%AA%E6%9B%B4%E5%AE%89%E5%85%A8%E7%9A%84%E5%88%A0%E9%99%A4%E5%91%BD%E4%BB%A4rm/</link><pubDate>Fri, 18 Oct 2019 15:00:01 +0800</pubDate><guid>/blog/2019-10-18-%E5%A6%82%E4%BD%95%E5%AE%9E%E7%8E%B0%E4%B8%80%E4%B8%AA%E6%9B%B4%E5%AE%89%E5%85%A8%E7%9A%84%E5%88%A0%E9%99%A4%E5%91%BD%E4%BB%A4rm/</guid><description>img { width: 680px; padding-bottom: 1rem; } 背景 # 大家有没有因为一时大意，错误地执行了rm -rf而导致重要文件被删除的情况？一定有那么一次两次的吧。前几天，我又犯了这一次这样的错误。本来是要删除当前目录下的一个文件，于是执行 rm -rf .，这里还没有输入完，因为我调整了KeyRepeat设置项的原因吧，按键延迟很短，结果命令变成了 rm -rf ..，这个时候..已经指向了HOME目录……额，没关注右手，左手还没有tab候选，右手已经键入了回车，gg，眼睁睁地看着大量文件被删除，ctrl+c已经太晚了 :( 。
+多亏macOS默认对Desktop、Document等目录下的文件做了自动地备份，不然就真的要苦了，虽然对重要文件、数据也有做过备份，但是也不能做到按月、按天的备份，哪怕是最近几个月的数据、配置的丢失，对我来说也是挺伤的。果不其然，后续几天陆陆续续发现丢失了各种各样的配置，IDE的、bash的、git的、pet的……各种各样的！
+不幸中的万幸，一些自己认为真的很重要的数据，一般在Document中交给icloud做了备份，这些数据倒是可以恢复，虽然慢了点，但是能恢复总还是好的！感谢icloud提供的云存储服务！
+如何避免误删除文件 # 经此一役之后，我还是思考了一些如何规避的问题，我有多年的Linux使用经验，竟然也会犯这样的错误，我将其归因于：过失问题，虽然像我这样的有经验的开发者极少会犯这样的错误，但是还是会偶尔发生！很多开发者都提出了自己的一些想法，如何规避rm造成的文件误删问题，我们这里不考虑如何恢复的问题，如果是私人笔记本单硬盘单分区的话，恢复的困难度是比较高的。
+删除只用系统gui删除，如macOS、windows、kde下删除文件到垃圾箱，误删的话还是可以从垃圾箱恢复的；
+不适用：执行删除动作是很常见的，作为一名开发者，我不大可能使用gui来频繁切换目录后才删除文件。
+自定义bash中的alias，如alias rm=&amp;ldquo;function rm() {&amp;hellip;.}&amp;quot;，该函数内部做一些检查，以决定是否删除文件；
+不适用：这也是一个解决问题的思路，但是能否与原生的/bin/rm命令完全兼容是一个问题，而且检查逻辑可能要频繁改动才能胜任各种避免误删的场景，使用起来不是那么灵活。
+使用第三方的删除工具，如github上的一些类似rm-safe的工具，代替原生的/bin/rm命令；
+不适用：这些工具不能完全与/bin/rm兼容，尤其是那些命令选项不完全兼容，而/bin/rm是一个非常好用的工具，我们只是想尽力规避下误删除的风险而已。
+看上去没有一个现有工具能够完全满足自己的选择，那就自己按自己的需要开发一个吧！
+设计更安全的rm工具 # 分析/bin/rm # 首先，不得不说，/bin/rm是一个非常好用的命令，删除文件、删除没目录等等，可以说使用频率非常高，它也确实很好用。说白了，我们只是要在它的基础上做些安全方面的风险规避就能满足需求。
+/bin/rm，它有一系列的命令选项，且是POSIX风格的。
+如果我们开发一个工具，或者在/bin/rm基础上包一层的话，我们最好也使用POSIX风格的命令选项来解析; 涉及到rm相关的选项，原来rm有的我们也要有，而且功能必须保持一致； 说白了就是，我们要保证用户使用的时候，习惯保持不变，甚至没有意识到自己在使用一个安全增强的rm。
+如何安全增强 # rm动作是用户自己执行的，除了用户自己清楚目标文件是否重要，没有其他人可以做出胜过文件拥有者的决定，所以安全增强的决定还是交给用户自己来做出，我们的工具只是协助用户完成这样的动作。
+设计一个安全增强的rm：
+支持pin命令，如rm pin Documents，保护Documents目录及其下的文件； 当执行rm -rf Documents时，发现有.pinLock文件存在，表示Documents目录及其下的文件、子目录受保护，拒绝删除； 当执行rm -rf Documents/dir/file时，会递归地回溯目录层级，如果路径上任一父目录受保护，该文件不能被删除； 支持unpin命令，如rm unpin Documents，取消Documents当前一级目录的保护； 当执行rm -rf Documents/dir/file时，如果Documents处于unpin状态，但是dir处于pin状态，file也是受保护的，不能删除； 支持-r选项，允许递归地添加、移除保护； 实现该rm命令 # 以下是大致的rm命令操作的help信息，它有3个子命令，help显示帮助信息，pin用来对目录添加保护，unpin移除保护。</description></item></channel></rss>

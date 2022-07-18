@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>nio on</title><link>/tags/nio/</link><description>Recent content in nio on</description><generator>Hugo -- gohugo.io</generator><language>en-US</language><lastBuildDate>Wed, 05 Apr 2017 14:56:32 +0800</lastBuildDate><atom:link href="/tags/nio/index.xml" rel="self" type="application/rss+xml"/><item><title>Java NIO Tutorials</title><link>/blog/2017-04-20-%E5%AD%A6%E4%B9%A0java-nio/</link><pubDate>Wed, 05 Apr 2017 14:56:32 +0800</pubDate><guid>/blog/2017-04-20-%E5%AD%A6%E4%B9%A0java-nio/</guid><description>1 前言 # Java NIO，意为Java New IO，是一种相对于Java标准IO、网络API的替代方案。从JDK 1.4开始NIO就被引入了进来，它提供了另一种IO处理的方式，这使得Java在IO处理方面向前迈进了一大步。
+NIO Channel &amp;amp; Buffer # 在Java标准IO里面，IO处理的对象是字节流或字符流，在NIO里面我们处理的对象是channel和buffer，数据读总是从channel中读入到buffer，输入写总是从buffer写入到channel。
+NIO Non-Blocking IO # Java NIO使得我们可以通过非阻塞的方式执行IO处理，例如一个线程请求从channel中读取数据到buffer的时候，在channel执行数据读取操作到buffer的过程中，线程仍然可以执行其他的处理工作，当数据被读取到buffer中之后，线程再去对数据进行处理。数据写的过程也是与此类似。
+备注：
+其实参考glibc中的pthread用户级线程库实现，可以大致想到这种channel、buffer工作模式的一种大致实现，大不了我多开一个用户线程让其执行channel和buffer之间的数据传输工作，处理完之后给原本请求channel读写数据的用户线程发个信号让其进行数据处理。Linux中的AIO就是这么搞的，可以参考《Linux设备驱动开发》。
+大家所描述的没有底层硬件支持的异步，很多都是指的软件代码执行序上的异步，本质上代码还是在以同步的方式执行，只不过在这些同步技术之上结合一些小佐料起到了类似的异步执行的效果。
+NIO Selector # Java NIO中有Selector（选择器）的概念，一个selector可以对多个channel上的事件进行监听，例如对多个channel上的连接打开、数据到达事件进行监听，因此一个selector可以用于对多个channel上的连接打开、关闭以及读写事件进行监听、处理。
+备注：
+Linux中的selector本质上是基于epoll实现的，因此可以结合epoll来理解selector。
+channel不过是对网络套接字的封装，buffer不过是对接收缓冲、发送缓冲的封装，selector不过是对epollfd的封装，selector对多个channel的监听，不过是epoll在epollfd上EPOLL_CTL_ADD了多个channel对应的fd，并对其上的事件进行必要的监听。selector轮询事件是否发生，本质上也就是epoll_wait轮询注册的多个fd上是否有事件发生。
+下面将展开介绍Java NIO是如何工作的。
+2 概要 # Java NIO包括3个核心组件，即channel、buffer、selector。Java NIO里面包括的类不止这几个，但是我个人认为Java NIO API的核心类就这几个，其他的例如Pipe、FileLock子类的都是配合这3个核心组件使用的工具类，所以这里先重点介绍channel、buffer、selector，后面会在独立章节中对其他类进行介绍。
+NIO Channel &amp;amp; Buffer # Java NIO中的所有IO操作几乎都是从一个channel开始的，channel可以看做是对一对套接字的封装，例如一个tcp连接。可以从channel中读取数据到buffer，同样也可以将buffer中的数据写入到channel中，下图展示了channel和buffer的这一关系。
+Channel大致有如下几种实现：
+FileChannel DatagramChannel SocketChannel ServerSocketChannel 其中FileChannel主要用于文件io，DatagramChannel主要用于udp网络通信，SocketChannel用于tcp网络通信，而ServerSocketChannel用于建立tcp连接。
+Buffer大致有如下几种实现：
+ByteBuffer CharBuffer DoubleBuffer FloatBuffer IntBuffer LongBuffer ShortBuffer 上述多种Buffer的不同之处在于其中存储的数据类型的差异，例如ByteBuffer就是按照直接进行读写，CharBuffer就是按照字符进行读写。</description></item></channel></rss>
